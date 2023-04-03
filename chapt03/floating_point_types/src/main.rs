@@ -1,3 +1,6 @@
+use regex::Regex;
+
+
 fn main() {
     assert!((-1. / f32::INFINITY).is_sign_negative());
     assert_eq!(-f32::MIN, f32::MAX);

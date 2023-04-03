@@ -1,5 +1,5 @@
 [package]
-name = "floating_point_types"
+name = "arrays_vec_slices"
 version = "0.1.0"
 edition = "2021"
 
