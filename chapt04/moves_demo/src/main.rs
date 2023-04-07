@@ -11,5 +11,24 @@ fn main() {
     composers.push(Person { name: "Palestrina".to_string(),
     birth: 1525 });
 
+    {
+        #[derive(Copy, Clone)]
+        struct Label { number: u32 }
+
+        fn print(l: Label) {
+            println!("STAMP: {}", l.number);
+        }
+
+        let l = Label { number: 3 };
+        print(l);
+        println!("My label number is: {}", l.number);
+
+        //error
+        /*
+        #[derive(Copy, Clone)]
+        struct StringLabel { name: String } // this field does not implement `Copy`
+        */
+    }
+
 
 }
