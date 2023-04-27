@@ -21,3 +21,18 @@ fn chop(b: Broom) -> (Broom, Broom) {
 }
 
 ```
+
+## Passing Self as a Box, Rc, or Arc
+- If it can pass ownership of the *Rc*, it simply hands over the pointer.
+
+        let shared_node = Rc::new(Node::new("first"));
+        shared_node.append_to(&mut parent);
+
+- If it needs to retain ownership of an *Rc*, it just bumps the reference count. 
+
+        shared_node.clone().append_to(&mut parent);
+
+- Only if it owns the *Node* itself must it call *Rc::new* to allocate heap space and move the *Node* into it.Since *parent* will insist on referring to its children via *Rc<Node>* pointers, this was going to be necessary eventually. 
+
+        let owned = Node::new("owned directly");
+        Rc::new(owned).append_to(&mut parent);
