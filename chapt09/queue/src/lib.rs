@@ -93,6 +93,7 @@ fn test_split() {
 
 }
 
+// type-associated function
 impl Queue {
     pub fn new() -> Queue {
         Queue { older: Vec::new(), younger: Vec::new() }

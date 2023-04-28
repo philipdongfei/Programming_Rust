@@ -1,24 +1,24 @@
 
 
 /// A first-in, first-out queue of characters.
-pub struct Queue {
-    older: Vec<char>, // older elements, eldest last.
-    younger: Vec<char> // younger elements, youngest last.
+pub struct Queue<T> {
+    older: Vec<T>, // older elements, eldest last.
+    younger: Vec<T> // younger elements, youngest last.
 }
 
-impl Queue {
+impl<T>  Queue<T> {
     pub fn new() -> Self {
         Queue { older: Vec::new(), younger: Vec::new() }
     }
 
     /// Push a character onto the back of a queue.
-    pub fn push(&mut self, c: char) {
-        self.younger.push(c);
+    pub fn push(&mut self, t: T) {
+        self.younger.push(t);
     }
 
     /// Pop a character off the front of a queue. Return `Some(c)` if there
     /// was a character to pop, or `None` if the queue was empty.
-    pub fn pop(&mut self) -> Option<char> {
+    pub fn pop(&mut self) -> Option<T> {
         if self.older.is_empty() {
             if self.younger.is_empty(){
                 return None;
@@ -40,7 +40,7 @@ impl Queue {
         self.older.is_empty() && self.younger.is_empty()
     }
 
-    pub fn split(self) -> (Vec<char>, Vec<char>) {
+    pub fn split(self) -> (Vec<T>, Vec<T>) {
         (self.older, self.younger)
     }
 }
@@ -51,7 +51,8 @@ impl Queue {
 #[test]
 fn test() {
     // test push, pop
-    let mut q = Queue { older: Vec::new(), younger: Vec::new() };
+//    let mut q = Queue { older: Vec::new(), younger: Vec::new() };
+    let mut q = Queue::new();
 
     q.push('0');
     q.push('1');
@@ -90,11 +91,10 @@ fn test() {
     bq.push('■');
 }
 
-/*
 #[test]
 fn test_generic() {
     let mut q = Queue::<char>::new();
-    &mut q;
+    let _ = &mut q;
     drop(q);
 
     let mut q = Queue::new();
@@ -106,4 +106,3 @@ fn test_generic() {
     q.push("BTC"); // Bitcoins per USD, 2019-6
     r.push(13764.0); // Rust fails to detect irrational exuberance
 }
-*/
