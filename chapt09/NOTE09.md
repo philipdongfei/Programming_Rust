@@ -36,3 +36,23 @@ fn chop(b: Broom) -> (Broom, Broom) {
 
         let owned = Node::new("owned directly");
         Rc::new(owned).append_to(&mut parent);
+
+## Structs with Lifetime Parameters
+Here's a function to scan a slice and return an *Extrema* value whose fields refer to its elements:
+'''
+fn find_extrema</'s>(slice: &'s [i32]) -> Extrema</'s> {
+        //TODO: find extrema 
+}
+
+'''
+
+Because it's so common for the return type to use the same lifetime as an argument, Rust lets us ommit the lifetimes when there's one obvious candidate.
+'''
+fn find_extrema(slice: &[i32]) -> Extrema {
+
+}
+'''
+
+## Interior Mutability
+Cells are easy to use. The other drawback is less obvious and more serious: cells--and any types that contain them--are not thread-safe. Rust therefore will not allow multiple threads to access them at once.
+
