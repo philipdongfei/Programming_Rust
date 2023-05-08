@@ -31,6 +31,20 @@ enum RoughTime {
     InTheFuture(TimeUnit, u32), // tuple variants
 }
 
+fn rough_time_to_english(rt: RoughTime) -> String {
+    match rt {
+        RoughTime::InThePast(units, count) => 
+            format!("{} {} ago", count, units.plural()),
+        RoughTime::JustNow =>
+            format!("just now"),
+        RoughTime::InTheFuture(unit, 1) => 
+            format!("a {} from now", unit.singular()),
+        RoughTime::InTheFuture(units, count) => 
+            format!("{} {} from now", count, units.plural()),
+
+    }
+}
+
 // struct variants
 enum Shape {
     Sphere { center: Point3d, radius: f32 },
