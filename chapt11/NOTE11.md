@@ -35,3 +35,13 @@ let w: Box<dyn Write> = Box::new(local_file);
 *Box<dyn Write>*, like *&mut dyn Write*, is a fat pointer: it contains the address of the writer itself and the address of the vtable.
 This kind of conversion is the only way to create a trait object.
 
+## Which to Use
+**Trait Objects Advantages**
+1. Trait objects are the right choice whenever you need a collection of values of mixed types, all together.
+2. Another possible reason to use trait objects is to reduce the total amount of compiled code.
+
+**Generics Advantages**
+1. The first advantage is speed.
+2. The second advantage of generics is that not every trait can support trait objects.
+3. The third advantage of generics is that it's easy to bound a generic type parameter with serveral traits at once, as our *top_ten* function did when it required its *T* parameter to implement *Debug + Hash + Eq*.
+
