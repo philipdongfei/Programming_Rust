@@ -102,3 +102,81 @@ The *write* and *flush* methods are the basic methods that every writer must imp
 The line *impl<W: Write> WriteHtml for W* means "for every type *W* that implements *Write*, here's an implementation for *WriteHtml for W*."
 
 We said earlier that when you implement a trait, either the trait or the type must be new in the current crate. This is called the *orphan rule*. It helps Rust ensure that trait implementations are **unique**. Your code can't *imple Write(**trait**) for u8(**type**)*, because both *Write* and *u8* are defined in the standard library.
+
+## Self in Traits
+    
+    // error: the trait `Spliceable` cannot be made into an object
+    fn splice_anything(left: &dyn Spliceable, right: &dyn Spliceable) {
+        let combo = left.splice(right);
+        // ...
+    }
+
+The reason is something we'll see again and again as we dig into the advanced features of traits. Rust rejects this code because it has no way to type-check the call *left.splice(right)*. The whole point of trait objects is that the type isn't known until run time. Rust has no way to know at compile time if *left* and *right* will be the same type, as required.
+
+    pub trait MegaSpliceable {
+        fn splice(&self, other: &dyn MegaSpliceable) -> Box<dyn MegaSpliceable>;        
+    }
+
+This trait is compatible with trait objects. There's no problem type-checking calls to this *.splice()* method because the type of the argument *other* is not required to match the type of *self*, as long as both types are *MegaSpliceable*.
+
+## Subtraits
+    
+    /// Someone in the game world, either the player or some other
+    /// pixie, gargoyle, squirrel, ogre, etc.
+    trait Creature: Visible {
+        fn position(&self) -> (i32, i32);
+        fn facing(&self) -> Direction;
+    }
+
+The phrase *trait Creature: Visible* means that all creatures are visible. Every type that implements *Creature* must also implement the *Visible* trait:
+    
+    impl Visible for Broom {
+        ...
+    }
+
+    impl Creature for Broom {
+        ...
+    }
+
+In fact, Rust's subtraits are really just a shorthand for a bound on *Self*. A definition of *Creature* like this is exactly equivalent to the one shown earlier:
+
+    trait Creature where Self: Visible {
+        ...
+    }
+
+## Type-Associated Functions
+
+## Fully Qualified Method Calls
+
+    "hello".to_string()
+    str::to_String("hello")
+    ToString::to_string("hello")
+    <str as ToString>::to_string("hello")
+
+All four of these method calls do exactly the same thing. Most often, you'll just write *value.method()*. The other forms are *qualified* method calls. They specify the type or trait that a method is associated with. The last form, with the angle brackets, specifies both: a *fully qualified* method call.
+ 
+- When two methods have the same name.
+    
+    outlaw.draw(); // error: draw on screen or draw pistol?
+
+    Visible::draw(&outlaw); // ok: draw on screen
+    HasPistol::draw(&outlaw); // ok: corral
+
+- When the type of the *self* argument can't be inferred:
+
+    let zero = 0; // type unspecified; could be `i8`, `u8`, ...
+
+    zero.abs(); // error: can't call method `abs`
+                // on ambiguous numeric type
+    
+    i64::abs(zero); // ok
+
+- When using the function itself as a function value:
+
+    let words: Vec<String> = 
+        line.split_whitespace() // iterator produces &str values
+            .map(ToString::to_string) // ok
+            .collect();
+
+- When calling trait methods in macros.
+
