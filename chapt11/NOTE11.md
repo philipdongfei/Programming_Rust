@@ -155,28 +155,28 @@ In fact, Rust's subtraits are really just a shorthand for a bound on *Self*. A d
 
 All four of these method calls do exactly the same thing. Most often, you'll just write *value.method()*. The other forms are *qualified* method calls. They specify the type or trait that a method is associated with. The last form, with the angle brackets, specifies both: a *fully qualified* method call.
  
-- When two methods have the same name.
+* When two methods have the same name.
     
-    outlaw.draw(); // error: draw on screen or draw pistol?
+        outlaw.draw(); // error: draw on screen or draw pistol?
 
-    Visible::draw(&outlaw); // ok: draw on screen
-    HasPistol::draw(&outlaw); // ok: corral
+        Visible::draw(&outlaw); // ok: draw on screen
+        HasPistol::draw(&outlaw); // ok: corral
 
-- When the type of the *self* argument can't be inferred:
+* When the type of the *self* argument can't be inferred:
 
-    let zero = 0; // type unspecified; could be `i8`, `u8`, ...
+        let zero = 0; // type unspecified; could be `i8`, `u8`, ...
 
-    zero.abs(); // error: can't call method `abs`
-                // on ambiguous numeric type
-    
-    i64::abs(zero); // ok
+        zero.abs(); // error: can't call method `abs`
+                    // on ambiguous numeric type
+        
+        i64::abs(zero); // ok
 
-- When using the function itself as a function value:
+* When using the function itself as a function value:
 
-    let words: Vec<String> = 
-        line.split_whitespace() // iterator produces &str values
-            .map(ToString::to_string) // ok
-            .collect();
+        let words: Vec<String> = 
+            line.split_whitespace() // iterator produces &str values
+                .map(ToString::to_string) // ok
+                .collect();
 
-- When calling trait methods in macros.
+* When calling trait methods in macros.
 
