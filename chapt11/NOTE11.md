@@ -180,3 +180,76 @@ All four of these method calls do exactly the same thing. Most often, you'll jus
 
 * When calling trait methods in macros.
 
+## impl Trait
+
+We could easily replace this hairy return type with a trait object:
+    
+    fn cyclical_zip(v: Vec<u8>, u: Vec<u8>) -> Box<dyn Iterator<Item=u8>> {
+        Box::new(v.into_iter().chain(u.into_iter()).cycle())
+
+    }
+
+However, taking the overhead of dynamic dispatch and an unavoidable heap allocation every time this function is called just to avoid an ugly type signature doesn't seem like a good trade, in most cases.
+
+Rust has a feature called *impl Trait* designed for precisely this situation. *impl Trait* allows us to "erase" the type of a return value, specifying only the trait or traits it  implements, without dynamic dispatch or a heap allocation:
+
+    fn cyclical_zip(v: Vec<u8>, u: Vec<u8>) -> impl Iterator<Item=u8> { // impl trait
+        v.into_iter().chain(u.into_iter()).cycle()
+    }
+
+Now, rather than specifying a particular nested type of iterator combinator structs, *cyclical_zip's* signature just states that it returns some kind of iterator over *u8*. The return type expresses the intent of the function, rather than its implementation details.
+
+It's important to note that Rust doesn't allow trait methods to use *impl Trait* return values. Supporting this will require some improvements in the languages's type system. Until that work is done, only free functions and functions associated with specific types can use *impl Trait* returns.
+
+*impl Trait* can also be used in functions that take generic arguments. For instance, consider this simple generic function:
+    
+    fn print<T: Display>(val: T) {
+        println!("{}", val);
+    }
+
+It is identical to this version using *impl Trait*:
+
+    fn print(val: impl Display) {
+        println!("{}", val);
+    }
+
+There is one important exception. Using generics allows callers of the function to specify the type of the generic arguments, like **print::<i32>(42)**, while using *impl Trait* does not.
+
+## Associated Consts
+
+You can declare a trait with an associated constant using the same syntax as for a struct or enum:
+    
+    trait Greet {
+        const GREETING: &'static str = "Hello";
+        fn greet(&self) -> String;
+    }
+
+Like assocaited types and functions, you can declare them but not give them a value:
+
+    trait Float {
+        const ZERO: Self;
+        const ONE: Self;
+    }
+
+Then, implementors of the trait can define these values:
+
+    impl Float for f32 {
+        const ZERO: f32 = 0.0;
+        const ONE: f32 = 1.0;
+    }
+
+    
+    impl Float for f64 {
+        const ZERO: f64 = 0.0;
+        const ONE: f64 = 1.0;
+    }
+
+This allows you to write generic code that uses these values:
+
+    fn add_one<T: Float + AddOutput=T>>(value: T) -> T {
+        value + T::ONE
+    }
+
+Note that associated constants can't be used with trait objects, since the compiler relies on type information about the implementation in order to pick the right value at compile time.
+
+
