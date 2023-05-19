@@ -4,7 +4,7 @@ Generics and traits are closely related: generic functions use traits in bounds 
 ## Using Traits
 There is one unusual rule about trait methods: the trait itself must be in scope. Otherwise, all its methods are hidden.
 
-## Trait Objects
+### Trait Objects
 
     use std::io::Write;
 
@@ -21,7 +21,7 @@ What we want in Rust is the same thing, but in Rust, references are explicit:
 
 A reference to a trait type, like *writer*, is called a *trait object*. Like any other reference, a trait object points to some value, it has a lifetime, and it can be either mut or shared.
 
-## Trait object layout
+### Trait object layout
 In memory, a trait object is a fat pointer consisting of a pointer to the value, plus a pointer to a table representing that value's type. Each trait object therefore takes up two machine words, as shown in Figure 11-1.
 Rust automatically converts ordinary references into trait objects when needed.
 
@@ -33,7 +33,7 @@ Rust automatically converts ordinary references into trait objects when needed.
 *Box<dyn Write>*, like *&mut dyn Write*, is a fat pointer: it contains the address of the writer itself and the address of the vtable.
 This kind of conversion is the only way to create a trait object.
 
-## Which to Use
+### Which to Use
 
 **Trait Objects Advantages**
 1. Trait objects are the right choice whenever you need a collection of values of mixed types, all together.
@@ -44,7 +44,7 @@ This kind of conversion is the only way to create a trait object.
 2. The second advantage of generics is that not every trait can support trait objects.
 3. The third advantage of generics is that it's easy to bound a generic type parameter with serveral traits at once, as our *top_ten* function did when it required its *T* parameter to implement *Debug + Hash + Eq*.
 
-## Default Methods
+### Default Methods
 
     /// A Writer that ignores whatever data you write to it.
     pub struct Sink
@@ -82,7 +82,7 @@ Why does Rust let us *impl Write for Sink* without defining this method? The ans
 
 The *write* and *flush* methods are the basic methods that every writer must implement. A writer may also implement write_all, buf if not, the default implementation shown earlier will be used.
 
-## Traits and Other People's Types
+### Traits and Other People's Types
 
     use std::io::{self, Write};
     
@@ -103,7 +103,7 @@ The line *impl<W: Write> WriteHtml for W* means "for every type *W* that impleme
 
 We said earlier that when you implement a trait, either the trait or the type must be new in the current crate. This is called the *orphan rule*. It helps Rust ensure that trait implementations are **unique**. Your code can't *imple Write(**trait**) for u8(**type**)*, because both *Write* and *u8* are defined in the standard library.
 
-## Self in Traits
+### Self in Traits
     
     // error: the trait `Spliceable` cannot be made into an object
     fn splice_anything(left: &dyn Spliceable, right: &dyn Spliceable) {
@@ -119,7 +119,7 @@ The reason is something we'll see again and again as we dig into the advanced fe
 
 This trait is compatible with trait objects. There's no problem type-checking calls to this *.splice()* method because the type of the argument *other* is not required to match the type of *self*, as long as both types are *MegaSpliceable*.
 
-## Subtraits
+### Subtraits
     
     /// Someone in the game world, either the player or some other
     /// pixie, gargoyle, squirrel, ogre, etc.
@@ -144,7 +144,7 @@ In fact, Rust's subtraits are really just a shorthand for a bound on *Self*. A d
         ...
     }
 
-## Type-Associated Functions
+### Type-Associated Functions
 
 ## Fully Qualified Method Calls
 
@@ -180,7 +180,7 @@ All four of these method calls do exactly the same thing. Most often, you'll jus
 
 * When calling trait methods in macros.
 
-## impl Trait
+### impl Trait
 
 We could easily replace this hairy return type with a trait object:
     
@@ -215,7 +215,7 @@ It is identical to this version using *impl Trait*:
 
 There is one important exception. Using generics allows callers of the function to specify the type of the generic arguments, like **print::<i32>(42)**, while using *impl Trait* does not.
 
-## Associated Consts
+### Associated Consts
 
 You can declare a trait with an associated constant using the same syntax as for a struct or enum:
     
@@ -252,4 +252,13 @@ This allows you to write generic code that uses these values:
 
 Note that associated constants can't be used with trait objects, since the compiler relies on type information about the implementation in order to pick the right value at compile time.
 
+## Reverse-Engineering Bounds
+
+What we've been doing here is reverse-engineering the bounds on *N*, using the compiler to guide and check our work.
+
+One advantage of Rust's approach is forward compatibility of generic code.You can change the implementation of a public generic function or method, and if you didn't change the signature, you haven't broken any of its users.
+
+Another advantage of bounds is that when you do get a compiler error, at least the compiler can tell you where the trouble is.
+
+## Traits as a Foundation
 
