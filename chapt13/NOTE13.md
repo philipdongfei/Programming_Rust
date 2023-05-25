@@ -13,6 +13,10 @@
 
 ## Drop
 
+    trait Drop { 
+        fn drop(&mutself); 
+    }
+
 When a value's owner goes away, we say that Rust *drops* the value. 
 
 When a value is dropped, if it implements std::ops::Drop, Rust calls its *drop* method, before proceeding to drop whatever values its fields or elements own, as it normally would. This implicit invocation of drop is the only way to call that method;
@@ -50,6 +54,13 @@ This conversion happens implicitly when passing values to functions, so you can 
 
 ## Clone
 
+    trait Clone: Sized {
+        fn clone(&self) -> Self;
+        fn clone_from(&mut self, source: &Self) {
+            *self = source.clone()
+        }
+    }
+
 The *clone* method should construct an independent copy of *self* and return it. Since this method's return type is *Self* and functions may not return unsized values, the *Clone* trait itself extends the *Sized* trait: this has the effect of bounding implementation's *Self* types to be *Sized*.
 
 The *clone_from* method modifies *self* into a copy of source. The default definition of *clone_from* simply clones source and then moves that into *\*self*.
@@ -82,18 +93,88 @@ The traits are defined like this:
 The *deref* and *deref_mut* methods take a *&Self* reference and return a *&Self::Target* reference. *Target* should be something that *Self* contains, owns, or refers to: for *Box<Complex>* the *Target* type is *Complex*. Note that *DerefMut* extends *Deref*: if you can dereference something and modify it, certainly you should be able to borrow a shared reference to it as well. Since the methods return a reference with the same lifetime as
 *self*, *self* remains borrowed for as long as the returned reference lives.
 
-Since *deref* takes a *&Self* reference and returns a *&Self::Target* reference, Rust uses this to automatically convert references of the former type into the latter.(*&Self* => *&Self::Target*) In other words, if inserting a *deref* call would prevent a type mismatch, Rust inserts one for you. Implementing *DerefMut* enables the corresponding conversion for mutable references. These are called the **deref coercions**: one type is being
-"coerced" into behaving as another.
+Since *deref* takes a *&Self* reference and returns a *&Self::Target* reference, Rust uses this to automatically convert references of the former type into the latter.(*&Self* => *&Self::Target*) In other words, if inserting a *deref* call would prevent a type mismatch, Rust inserts one for you. Implementing *DerefMut* enables the corresponding conversion for mutable references. These are called the **deref coercions**: one type is being "coerced" into behaving as another.
 
+- If you have some *Rc<String>* value r and want to apply *String::find* to it, you can simply write *r.find('?')*, instead of *(*r).find('?')*: the method call implicitly borrows r and *&Rc<String>* coerces to *&String*, because *Rc<T>* implements *Deref<Target=T>*.
+- You can use methods like *split_at* on *String* values, even though *split_at* is a method of the *str* slice type, because *String* implements *Deref<Target=str>*. There's no need for *String* to reiimplement all of *str's* methods, since you can coerce a *&str* from a *String*.
+- If you have a vector of bytes *v* and you want to pass it to a function that expects a byte slice *&[u8]*, you can simply pass *&v* as the argument, since *Vec<T>* implements *Deref<Target=[T]>*.
+
+Rust will apply serveral deref coercions in succession if necessary.
+
+The deref coercions come with a caveat that can cause some confusion: Rust applies them to resolve type conflicts, but not to satisfy bounds on type variables.
 
 
 ## Default
 
+    trait Default {
+        fn default() -> Self;
+    }
+
+Some types have a reasonably obvious default value: the default vector or string is empty, the default number is zero, the default *Option* is *None*, and so on.
+
+Rust does not implicitly implement *Default* for struct types, but if all of a struct's fields implement *Default*, you can implement *Default* for the struct automatically using *#[derive(Default)]*.
+
+
 ## AsRef and AsMut
+
+When a type implements *AsRef<T>*, that means you can borrow a *&T* from it efficiently. *AsMut* is the analogue for mutable references. 
+
+    trait AsRef<T: ?Sized> {
+        fn as_ref(&self) -> &T;
+    }
+    
+    trait AsMut<T: ?Sized> {
+        fn as_mut(&mut self) -> &mut T;
+    }
+
+    impl<'a, T, U> AsRef<U> for &'a T
+        where T: AsRef<U>,
+              T: ?Sized, U: ?Sized
+    {
+        fn as_ref(&self) -> &U {
+            (*self).as_ref()
+        }            
+    }
+
+In other words, for any types *T* and *U*, if *T: AsRef<U>*, then *&T: AsRef<U>* as well: simply follow the reference and proceed as before. In particular, since *str: AsRef<Path>*, then *&str: AsRef<Path>* as well. In a sense, this is a way to get a limited form of deref coercion in checking *AsRef* bounds on type variables.
+
+You might assume that if a type implements *AsRef<T>*, it should also implement *AsMut<T>*.
+
 
 ## Borrow and BorrowMut
 
+The *std::borrow::Borrow* trait is similar to *AsRef*: if a type implements *Borrow<T>*, then its *borrow* method efficiently borrows a *&T* from it. But *Borrow* imposes more restrictions: a type should implement *Borrow<T>* only when a *&T* hashes and compares the same way as the value it's borrowed from.
+
+    trait Borrow<Borrowed: ?Sized> {
+        fn borrow(&self) -> &Borrowed;
+    }
+
+    trait BorrowMut<Borrowed: ?Sized>: Borrow<Borrowed> {
+        fn borrow_mut(&mut self) -> &mut Borrowed;
+    }
+
+As a convenience, every *&mut T* type also implements *Borrow<T>*, returning a shared reference *&T* as usual.
+
+
 ## From and Into
+
+The *std::convert::From* and *std::convert::Into* traits represent conversions that consume a value of one type and return a value of another.Whereas the *AsRef* and *AsMut* traits borrow a reference of one type from another, *From* and *Into* take ownership of their argument, transform it, and then return ownership of the result back to the caller.
+
+    trait Into<T>: Sized {
+        fn into(self) -> T;
+    }
+    
+    trait From<T>: Sized {
+        fn from(other: T) -> Self;
+    }
+
+You generally use *Into* to make your functions more flexible in the arguments they accept.
+
+The *from* method serves as a generic constructor for producing an instance of a type from some other single value.
+
+Given an appropriate *From* implementation, the standard library automatically implements the corresponding *Into* trait.
+
+
 
 ## TryFrom and TryInto
 
