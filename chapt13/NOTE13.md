@@ -178,8 +178,42 @@ Given an appropriate *From* implementation, the standard library automatically i
 
 ## TryFrom and TryInto
 
+    pub trait TryFrom<T>: Sized {
+        type Error;
+        fn try_from(value: T) -> Result<Self, Self::Error>;
+    }
+    
+    pub trait TryInto<T>: Sized {
+        type Error;
+        fn try_into(self) -> Result<T, Self::Error>;
+    }
+
+Where *From* and *Into* relate types with simple conversions, *TryFrom* and *TryInto* extend the simplicity of *From* and *Into* conversions with the expressive error handling afforded by *Result*.
+
+
 ## ToOwned
 
+The *std::borrow::ToOwned* trait provides a slightly looser way to convert a reference to an owned value:
+
+    trait ToOwned {
+        type Owned: Borrow<Self>;
+        fn to_owned(&self) -> Self::Owned;
+    }
+
+Unlike *clone*, which must return exactly *Self*, *to_owned* can return anything you could borrow a *&Self* from: the *Owned* type must implement *Borrow<Self>*.
+
 ## Borrow and ToOwned at Work: The Humble Cow
+
+    enum Cow<'a, B: ?Sized>
+        where B: ToOwned
+    {
+            Borrowed(&'a B),
+            Owned(B as ToOwned>::Owned),
+    }
+
+A *Cow<B>* either borrows a shared reference to a B or owns a value from which we could borrow such a reference.Since *Cow* implements *Deref*, you can call methods on it as if it were a shared reference to a B: if it's Owned, it borrows a shared reference to the owned value; and if it's Borrowed, it just hands out the reference it's holding.
+
+<font color="red">[6 things you can do with the Cow in Rust](https://dev.to/kgrech/6-things-you-can-do-with-the-cow-in-rust-4l55)</fond>
+
 
 
