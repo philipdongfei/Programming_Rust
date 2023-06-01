@@ -173,6 +173,109 @@ When *greeting* is used in *greet*, it's moved into the struct that represents *
 
 ## Callbacks
 
+A lot of libraries use *callbacks* as part of their API: functions provided by the user, for the library to call later.
+
+We can begin by declaring a few types to represent HTTP requests and responses:
+
+    struct Request {
+        method: String,
+        url: String,
+        headers: HashMap<String, String>,
+        body: Vec<u8>
+    }
+    
+    struct Response {
+        code: u32,
+        headers: HashMap<String, String>,
+        body: Vec<u8>
+    }
+
+we showed a *Salad* type that had the same problem:
+    
+    struct Salad<V: Vegetable> {
+        veggies: Vec<V>
+    }
+
+The solution here is the same as for the salad: since we want to support a variety of types, we need to use **boxes** and **trait objects**:
+
+    type BoxedCallback = Box<dyn Fn(&Request) -> Response>;
+
+    struct BasicRouter {
+        routes: HashMap<String, BoxedCallback>
+    }
+
+Each box can contain a different type of closure, so a single *HashMap* can contain all sorts of callbacks. Note that the type parameter **C** is gone.
+
+    impl BasicRouter {
+        // Create an empty router.
+        fn new() -> BasicRouter {
+            BasicRouter { routes: HashMap::new() }
+        }
+    
+        // Add a route to the router.
+        fn add_route<C>(&mut self, url: &str, callback: C) 
+        where C: Fn(&Request) -> Response + 'static
+        {
+            self.routes.insert(url.to_string(), Box::new(callback));
+        }
+    }
+
+> Note the two bounds on C in the type signature for **add_route**: a particular **Fn** trait and the 'static lifetime. Rust makes us add this 'static bound. Without it, the call to **Box::new(callback)** would be an error, because it's not safe to store a closure if it contains borrowed references to variables that are about to go out of scope.
+
+Finally, our simple router is ready to handle incoming requests:
+    
+    impl BasicRouter {
+        fn handle_request(&self, request: &Request) -> Response {
+            match self.routes.get(&request.url) {
+                None => not_found_response(),
+                Some(callback) => callback(request)
+            }
+        }
+    }
+
+At the cost of some flexibility, we could also write a more space-efficient version of this router that, rather than storing trait objects, uses *function pointers*, or *fn* types.
+
+In fact, closures that don't capture anything from their environment are identical to function pointers, since they don't need to hold any extra information about captured variables.
+    
+    fn add_ten(x: u32) -> u32 {
+        x + 10
+    }
+    let fn_ptr: fn(u32) -> u32 = add_ten
+    let eleven = fn_ptr(1); // 11
+    // `closure_ptr` identical to `fn_ptr`.
+    let closure_ptr: fn(u32) -> u32 = |x| x + 10;
+    let eleven = closure_ptr(1); // 2
+
+Unlike capturing closures, these function pointers take up only a single *usize*.
+
+    struct FnPointerRouter {
+        routes: HashMap<String, fn(&Request) -> Response>
+    }
+
+    impl FnPointerRouter {
+        // Create an empty router.
+        fn new() -> FnPointerRouter {
+            FnPointerRouter { routes: HashMap::new() }
+        }
+    
+        // Add a route to the router.
+        fn add_route(&mut self, url: &str, callback: fn(&Request) -> Response)
+        {
+            self.routes.insert(url.to_string(), callback);
+        }
+    }
+
+As laid out in Figure 14-1, closures have unique types because each one captures different variables, so among other things, they're each a different size. If they don't capture anything, though, there's nothing to store. By using *fn* pointers in functions that take callbacks, you can restrict a caller to use only these noncapturing closures, gaining some perfomance and flexibility within the code using callbacks at the cost of flexibility for the users of your API.
+
+
 ## Using Closures Effectively
+
+As we've seen, Rust's closures are different from closures in most other launguages. The biggest difference is that in languages with GC, you can use local variables in a closure without having to thingk about lifetimes or ownership.
+
+For every element of a user interface, an MVC(Model-View-Controller) framework creates three objects: a *model* representing that UI element's state, a *view* that's responsible for its appearance, and a *controller* that handles user interaction.
+
+You can't implement this pattern in Rust without making some changes. Ownership must be made explicit, and reference cycles must be eliminated. The model and the controller can't have direct references to each other.
+
+
 
 
