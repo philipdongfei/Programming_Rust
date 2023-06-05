@@ -53,14 +53,99 @@ If there's more than one common way to iterator over a type, the type usually pr
 
 ### IntoIterator Implementations
 
+Most collections actually provide several implementations of **IntoIterator**, for shared references **(&T)**, mutable references **(&mut T)**, and moves **(T)**:
+
+- Given a *shared reference* to the collection, **into_iter** returns an iterator that produces shared references to its items.
+- Given a *mutable reference* to the collection, **into_iter** returns an iterator that produces mutable references to the items.
+- When passed the collection *by value*, **into_iter** returns an iterator that takes ownership of the collection and returns items by value; the item's ownership moves from the collection to the consumer, and the original collection is consumed in the process.
+
+Since a **for** loop applies **IntoIterator::into_iter** to its operand, these three implementations are what create the following idioms for iterating over shared or mutable references to a collection, or consuming the collection and taking ownership of its elements:
+
+    for element in &collection {...}
+    for element in &mut collection {...}
+    for element in collection {...}
+
+Note every type provides all three implementations.
+
+Slices implement two of the three **IntoIterator** variants; since they don't own their elements, there is no "by value" case.
+
+
+**IntoIterator** can also be useful in generic code: you can use a bound like **T**: **IntoIterator** to restrict the type variable **T** to types that can be iterated over. Or, you can write **T**: **IntoIterator<Item=U>** to further require the iteration to produce a particular type **U**.
+
+
+
 ### from_fn and successors
 
+Given a function returning **Option<T>**, **std::iter::from_fn** returns an iterator that simply calls the function to produce its items.
+
+A note of caution: the **from_fn** and **successors** methods are flexible enough that you could turn pretty much any use of iterators into a single call to one or the other, passing complex closures to get the behavior you need. But doing so neglects the opportunity that iterators provide to clarify how data flows through the computation and use standard names for common patterns. Make sure you've familiarized yourself with the other iterator methods
+in this chapter before you lean on these two; there are often nicer ways to get the job done.
+
+
 ### drain Methods
+
+Many collection types provide a **drain** method that takes a mutable reference to the collection and returns an iterator that passes ownership of each element to the consumer.
 
 ### Other Iterator Sources
 
 
 ## Iterator Adapters
+
+Once you have an iterator in hand, the **Iterator** trait provides a broad selection of *adapter methods*, or simply *adapters*, that consume one iterator and build a new one with useful behaviors.
+
+### map and filter
+
+A chain of iterator adapters is like a pipeline in the Unix shell: each adapter has asingle purpose, and it's clear how the sequence is being transformed as one reads from left to right.
+
+These adapters' signatures are as follows:
+    
+    fn map<B, F>(self, f: F) -> impl Iterator<Item=B>
+        where Self: Sized, F: FnMut(Self::Item) -> B;
+
+    fn filter<P>(self, predicate: P) -> impl Iterator<Item=Self::Item>
+        where Self: Sized, P: FnMut(&Self::Item) -> bool;
+
+the method returns an **Iterator** that produces items of the given type.
+
+Since most dapaters take **self** by value, they require **Self** to be **Sized** (which all common iterators are).
+
+A **map** iterator passes each item to its closure by value and, in turn, passes along ownership of the closure's result to its consumer. A **filter** iterator passes each item to its closure by shared reference, retaining ownership in case the item is selected to be passed on to its consumer. This is why the xample must dereference s to compare it with "ignuanas": the **filter** iterator's item type is **&str**, so the type of the closure's argument s is
+**&&str**.
+
+There are two important points to notice about iterator adapters.
+
+First, simple calling an adapter on an iterator doesn't consume any items; it just returns a new iterator, ready to produce its own items by drawing from the first iterator as needed. In a chain of adapters, the only way to make any work actually get done is to call **next** on the final iterator.
+
+The second important point is that iterator adapters are a zero-overhead abstraction.
+
+
+### filter_map and flat_map
+
+### flatten
+
+### take and take_while
+
+### skip and skip_while
+
+### peekable
+
+### fuse
+
+### Reversible Iterators and rev
+
+### inspect
+
+### chain
+
+### enumerate
+
+### zip
+
+### by_ref
+
+### cloned, copied
+
+### cycle
 
 ## Consuming Iterators
 
