@@ -121,6 +121,25 @@ The second important point is that iterator adapters are a zero-overhead abstrac
 
 ### filter_map and flat_map
 
+The **filter_map** adapter is similar to **map** except that it lets its closure either transform the item into a new item (as **map** does) or drop the item from the iteration.
+
+    fn filter_map<B, F>(self, f: F) -> impl Iterator<Item=B>
+        where Self: Sized, F: FnMut(Self::Item) -> Option<B>;
+
+You can think of the **flat_map** adapter as continuing in the same vein as **map** and **filter_map**, except that now the closure can return ont just one item (as with map) or zero or one items (as with **filter_map**), but a sequence of any number of items.
+The signature of **flat_map** is shown here:
+    
+    fn flat_map<U, F>(self, f: F) -> impl Iterator<Item=U::Item>
+        where F: FnMut(Self::Item) -> U, U: IntoIterator;
+
+The closure passed to **flat_map** must return an iterable, but any sort of iterable will do[1].
+
+[1]: In fact, since **Option** is an iterable behaving like a sequence of zero or one items, **iterator.filter_map(closure)** is equivalent to **iterator.flat_map(closure)**, assuming **closure** returns an **Option<T>**.
+
+
+But remember that iterators are lazy: it's only the **for** loop's calls to the **flat_map** iterator's **next** method that cause work to be done. The full concatenated sequence is never constructed in memory. Instead, what we have here is a little state machine that draws from the city iterator, one item at a time, until it's exhausted, and only then produces a new city iterator for the next country. The effect is that of a nested loop, but packaged up for use as an iterator.
+
+
 ### flatten
 
 ### take and take_while
