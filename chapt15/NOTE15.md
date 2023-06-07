@@ -142,13 +142,72 @@ But remember that iterators are lazy: it's only the **for** loop's calls to the 
 
 ### flatten
 
+The **flatten** adapter concatenates an iterator's items, assuming each item is itself an iterable.
+
+The name "flatten" comes from the image of flattening a two-level structure into a one-level structure: the **BTreeMap** and its **Vecs** of names are flattened into an iterator producing all the names.
+
+The signature of **flatten** is as follows:
+    
+    fn flatten(self) -> impl Iterator<Item=Self::Item::Item>
+        where Self::Item: IntoIterator;
+
+In other words, the underlying iterator's items must themselves implement **IntoIterator** so that it is effectively a sequence of sequences.The **flatten** method then returns an iterator over the concatenation of those sequences.
+
+The **flatten** method gets used in a new surprising ways. If you have a **Vec<Option<...>>** and you want to iterate over only the **Some** values, **flatten** works beautifully:
+
+    assert_eq!(vec![None, Some("day"), None, Some("one")]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>(),
+        vec!["day", "one"]);
+
+This works because **Option** itself implements **IntoIterator**, representing a sequence of either zero or one elements. The **None** elements contribute nothing to the iteration, whereas each **Some** element contributes a single value. Similarly, you can use **flatten** to iterator over **Option<Vec<...>>** values: **None** behaves the same as an empty vector.
+
+**Result** also implements **IntoIterator**, with **Err** representing an empty sequence, so applying **flatten** to an iterator of **Result** values effectively squeezes out all the **Err**s and throws them away, resulting in a stream of the unwrapped success values.
+
+
 ### take and take_while
+
+The **Iterator** trait's **take** and **take_while** adapters let you end an iteration after a certain number of items or when a closure decides to cut things off. Their signatures are as follows:
+
+    fn take(self, n: usize) -> impl Iterator<Item=Self::Item>
+        where Self: Sized;
+
+    fn take_while<P>(Self, predicate: P) -> impl Iterator<Item=Self::Item>
+        where Self: Sized, P: FnMut(&Self::Item) -> bool;
+
+Both take ownership of an iterator and return a new iterator that passes along items from the first one, possibly ending the sequence earlier. The **take** iterator returns **None** after producing at most n items. The **take_while** iterator applies **predicate** to each item and returns **None** in place of the first item for which **predicate** returns **false** and on every subsequent call to **next**.
+
 
 ### skip and skip_while
 
+The **Iterator** trait's **skip** and **skip_while** methods are the complement of **take** and **take_while**: they drop a certain number of items from the beginning of an iteration, or drop items until a closure finds one acceptable, and then pass the remaining items through unchanged. Their signatures are as follows:
+
+    fn skip(self, n: usize) -> impl Iterator<Item=Self::Item>
+        where Self: Sized;
+    fn skip_while<P>(self, predicate: P) -> impl Iterator<Item=Self::Item>
+        where Self: Sized, P: FnMut(&Self::Item) -> bool;
+
+
 ### peekable
 
+A peekable iterator lets you peek at the next item that will be produced without actually consuming it. You can turn any iterator into a peekable iterator by calling the **Iterator** trait's **peekable** method:
+
+    fn peekable(self) -> std::iter::Peekable<Self>
+        where Self: Sized;
+
+Here, **Peekable<Self>** is a **struct** that implements **Iterator<Item=Self::Item>**, and **Self** is the type of the underly iterator.
+
+A **Peekable** iterator has an additional method **peek** that returns an **Option<&Item>**: **None** if the underlying iterator is done and otherwise **Some(r)**, where r is a shared reference to the next item.(Note that if the iterator's item type is already a reference to something, this ends up being a reference to a reference.)
+
+Calling **peek** tries to draw the next item from the underlying iterator, and if there is one, caches it until the next call to **next**. 
+
 ### fuse
+
+The **fuse** adapter takes any iterator and produces one that will definitely continue to return **None** once it has done so the first time.
+
+The **fuse** adapter is probably most useful in generic code that needs to work with iterators of uncertain origin.
+
 
 ### Reversible Iterators and rev
 
