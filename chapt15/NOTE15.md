@@ -211,19 +211,73 @@ The **fuse** adapter is probably most useful in generic code that needs to work 
 
 ### Reversible Iterators and rev
 
+Some iterators are able to draw items from both ends of the sequence. You can reverse such iterators by using the **rev** adapter. 
+Such iterators can implement the **std::iter::DoubleEndedIterator** trait, which extends **Iterator**:
+
+    trait DoubleEndedIterator: Iterator {
+        fn next_back(&mut self) -> Option<Self::Item>;
+    }
+
+If an iterator is double-ended, you can reverse it with the **rev** adapter:
+
+    fn rev(self) -> impl Iterator<Item=Self>
+        where Self: Sized + DoubleEndedIterator;
+
+
 ### inspect
+
+The **inspect** adapter is handy for debugging pipelines of iterator adapters, but it isn't used much in production code.
 
 ### chain
 
+The **chain** adapter appends one iterator to another. More precisely, *i1.chain(i2)* returns an iterator that draws items from *i1* until it's exhausted and then draws items from *i2*.
+The **chain** adapter's signature is as follows:
+    
+    fn chain<U>(self, other: U) -> impl Iterator<Item=Self::Item>
+        where Self: Sized, U: IntoIterator<Item=Self::Item>;
+
+
 ### enumerate
+
+The **Iterator** trait's **enumerate** adapter attaches a running index to the sequence, taking an iterator that produces items A, B, C, ... and returning an iterator that produces pairs(0, A), (1, B), (2, C), 
 
 ### zip
 
+The **zip** adapter combines two iterators into a single iterator that produces pairs holding one value from each iterator, like a zipper joining its two sides into a single seam. The zipped iterator ends when either of the two underlying iterators ends.
+
+whereas **enumerate** attaches indices to the sequence, **zip** attaches any arbitrary iterator's items.
+The argument to **zip** doesn't need to be an iterator itself; it can be any iterable.
+
 ### by_ref
+
+An iterator's **by_ref** method borrows a mutable reference to the iterator so that you can apply adapters to the reference. When you're done consuming items from these adapters, you drop them, the borrow ends, and you regain access to your original iterator.
+
+The **by_ref** adapter's definition is trivial: it returns a mutable reference to the iterator. Then, the standard library includes this strange little implementation:
+    
+    impl<'a, I: Iterator + ?Sized> Iterator for &'a mut I {
+        type Item = I::Item;
+        fn next(&mut self) -> Option<I::Item> {
+            (**self).next()
+        }
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            (**self).size_hint()
+        }
+    }
+
+In other words, if **I** is some iterator type, then **&mut I** is an iterator too, whose **next** and **size_hint** methods defer to its referent. When you call an adapter on a mutable reference to an iterator, the adapter takes ownership of the *reference*, not the iterator itself. That's just a borrow that ends when the adapter goes out of scope.
+
 
 ### cloned, copied
 
+The **cloned** adapter takes an iterator that produces references and returns an iterator that produces values cloned from those references, much like **iter.map(|item| item.clone())**. Naturally, the reference type must implement **Clone**.
+
+The **copied** adapter is the same idea, but more restrictive: the referent type must implement **Copy**. A call like **iter.copied()** is roughly the same as **iter.map(|r| *r)**.
+
+
 ### cycle
+
+The **cycle** adapter returns an iterator that endlessly repeats the sequence produced by the underly iterator. The underlying iterator must implement **std::clone::Clone** so that **cycle** can save its initial state and reuse it each time the cycle starts again.
+
 
 ## Consuming Iterators
 
