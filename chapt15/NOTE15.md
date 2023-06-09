@@ -281,5 +281,96 @@ The **cycle** adapter returns an iterator that endlessly repeats the sequence pr
 
 ## Consuming Iterators
 
+here we finish off the process by showing ways to consume them.
+
+### Simple Accumulation: count, sum, product
+
+The **count** method draws items from an iterator until it return **None** and tells you how many it got.
+The **sum** and **product** methods compute the sum or product of the iterator's items, which must be integers or floating-point numbers.
+
+### max, min
+
+The **min** and **max** methods on **Iterator** return the least or greastest item the iterator produces. The iterator's item type must implement **std::cmp::Ord** so that items can be compared with one another.
+
+Rust's floating-point types **f32** and **f64** implement only **std::cmp::PartialOrd**, not **std::cmp::Ord**, so you can't use the **min** and **max** methods to compute the least or greatest of a sequence of floating-point numbers.
+
+### max_by, min_by
+
+The **max_by** and **min_by** methods return the maximum or minimum item the iterator produces, as determined by a comparison function you provide.
+
+### max_by_key, min_by_key
+
+The **max_by_key** and **min_by_key** methods on **Iterator** let you select maximum or minimum item as determined by a closure applied to each item. The closure can select some field of the item or perform a computation on the items.
+
+    fn min_by_key<B: Ord, F>(self, f: F) -> Option<Self::Item>
+        where Self: Sized, F: FnMut(&Self::Item) -> B;
+    fn max_by_key<B: Ord, F>(self, f: F) -> Option<Self::Item>
+        where Self: Sized, F: FnMut(&Self::Item) -> B;
+
+
+### Comparing Item Sequences
+
+Although iterators do not support Rust's comparison operators, they do provide methods like **eq** and **lt** that do the same job, drawing pairs of items from the iterators and comparing them until a decision can be reached.
+
+### any and all
+
+The **any** and **all** methods apply a closure to each item the iterator produces and return **true** if the closure returns **true** for any item, or for all the items.
+
+### position, rposition, and ExactSizeIterator
+
+The **position** method applies a closure to each item from the iterator and returns the index of the first item for which the closure returns **true**. More precisely, it returns an **Option** of the index: if the closure returns **true** for no item, **position** returns **None**. It stops drawing items as soon as the closure returns **true**.
+
+The rposition method is the same, except that it searches from the right.
+
+An exact-size iterator is one that implements the **std::iter::ExactSizeIterator** trait:
+
+    trait ExactSizeIterator: Iterator {
+        fn len(&self) -> usize { ... }
+        fn is_empty(&self) -> bool { ... }
+    }
+
+### fold and rfold
+
+The **fold** method is a very general tool for accumulating some sort of result over the entire sequence of items an iterator produces. Given an initial value, which we'll call the *accumulator*, and a closure, **fold** repeatedly applies the closure to the current accumulator and the next item from the iterator. The value the closure returns is taken as the new accumulator, to be passed to the closure with the next item. The final accumulator value is what **fold** itself returns. If thesequence is empty, **fold** simply returns the initial accumulator.
+
+The **fold** method's signature is as follows:
+
+    fn fold<A, F>(self, init: A, f: F) -> A
+        where Self: Sized, F: FnMut(A, Self::Item) -> A;
+
+Here, **A** is the accumulator type. The **init** argument is an **A**, as is the closure's first argument and return value, and the return value of **fold** itself.
+
+### try_fold and try_rfold
+
+The **try_fold** method is the same as **fold**, except that the process of iteration can exit early, without consuming all the values from the iterator. The closure you pass to **try_fold** must return a **Result**: if it returns **Err(e)**, **try_fold** returns immediately with **Err(e)** as its value. Otherwise, it continues folding with the success value. The closure can also return an **Option**: returning **None** exits early, and the result is an **Option** of the folded value.
+
+### nth, nth_back
+
+The **nth** method takes an index n, skips that many items from the iterator, and returns the next item, or **None** if the sequence ends before that point. Calling **.nth(0)** is equivalent to **.next()**.
+
+Its signature is shown here:
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item>
+        where Self: Sized;
+
+The **nth_back** method is much the same, except that it draws from the back of a doble-ended iterator.
+
+### last
+
+The **last** method returns the last item the iterator produces, or **None** if it's empty. Its signature is as follows:
+
+    fn last(self) -> Option<Self::Item>;
+
+
+### find, rfind, and find_map
+
+### Building Collections: collect and FromIterator
+
+### The Extend Trait
+
+### partition
+
+### for_each and try_for_each
+
 ## Implementing Your Own Iterators
 
