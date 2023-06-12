@@ -1,7 +1,6 @@
 use std::io::prelude::*;
 
 
-
 fn main() {
 
     // count, sum, product
@@ -52,6 +51,7 @@ fn main() {
         Some((&"Portland", &583_776)));
     assert_eq!(populations.iter().min_by_key(|&(_name, pop)| pop),
         Some((&"Greenhorn", &2)));
+
 
     // comparing item sequences
     let packed = "Helen of Troy";
@@ -116,6 +116,79 @@ fn main() {
     // last
     let squares = (0..10).map(|i| i*i);
     assert_eq!(squares.last(), Some(81));
+
+
+    // find, rfind, and find_map
+    assert_eq!(populations.iter().find(|&(_name, &pop)| pop > 1_000_000), None);
+    assert_eq!(populations.iter().find(|&(_name, &pop)| pop > 500_000), Some((&"Portland", &583_776)));
+    // basic usage
+    let a = [1, 2, 3];
+
+    assert_eq!(a.iter().find(|&&x| x == 2), Some(&2));
+    assert_eq!(a.iter().find(|&&x| x == 5), None);
+
+    let a = [1, 2, 3];
+    let mut iter = a.iter();
+    assert_eq!(iter.find(|&&x| x == 2), Some(&2));
+
+    // we can still use `iter`, as there are more elements.
+    assert_eq!(iter.next(), Some(&3));
+
+    //rfind
+    // basic usage
+    let a = [1, 2, 3];
+
+    assert_eq!(a.iter().rfind(|&&x| x == 2), Some(&2));
+    assert_eq!(a.iter().rfind(|&&x| x == 5), None);
+
+
+    let a = [1, 2, 3];
+    let mut iter = a.iter();
+    assert_eq!(iter.rfind(|&&x| x == 2), Some(&2));
+
+    // we can still use `iter`, as there are more elements.
+    assert_eq!(iter.next_back(), Some(&1));
+
+    // find_map 
+    let a = ["lol", "NaN", "2", "5"];
+    let first_number = a.iter().find_map(|s| s.parse().ok());
+
+    assert_eq!(first_number, Some(2));
+
+    /* TODO: fix find_volcano_park
+    use std::hash::Hash;
+    struct Park<'a> {
+        name: &'a str,
+        state: &'a str,
+    }
+
+
+    let mut parks = HashMap::new();
+    parks.insert("Portland", Park {name: "Mt. Tabor Park", 
+        state:"Portlan"});
+    parks.insert("Washingto", Park {name: "Mount Rainer Nation Park", 
+        state: "Washingto"});
+    parks.insert("Oregon", Park {name: "Crater Lake National Park", 
+        state: "Oregon"});
+    fn find_volcano_park<'a, K, V>(city: &K, parks: &'a K) -> Option<&'a V>
+        where K: Eq  ,  K: Hash 
+    {
+        parks.get(city)
+    }
+
+    let big_city_with_volcano_park = populations.iter()
+        .find_map(|(&city, _)| {
+            if let Some(park) = find_volcano_park(city, &parks) {
+                // find_map returns this value, so our caller knows
+                // *which* park we found.
+                return Some((city, park.name));
+            }
+            // Reject this item, and continue the search.
+            None
+        });
+    assert_eq!(big_city_with_volcano_park, 
+        Some(("Portland", "Mt. Tabor Park")));
+    */
     
 
 }

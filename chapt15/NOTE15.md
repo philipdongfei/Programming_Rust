@@ -364,7 +364,40 @@ The **last** method returns the last item the iterator produces, or **None** if 
 
 ### find, rfind, and find_map
 
+The **find** method draws items from an iterator, returning the first item for which the given closure return **true**, or **None** if the sequence ends before a suitable item is found. Its signature is:
+
+    fn find<P>(&mut self, predicate: P) -> Option<Self::Item>
+        where Self: Sized,
+            P: FnMut(&Self::Item) -> bool;
+
+The **rfind** method is similar, but it requires a double-ended iterator and searches values from back to front, returning the *last* item for which the closure returns **true**.
+
+Sometimes your closure isn't just a simple predicate casting a Boolean judgment on each item and moving on: it might be something more complex that produces an interesting value in its own right. In this case, **find_map** is just what you want. Its signature is:
+
+    fn find_map<B, F>(&mut self, f: F) -> Option<B> where
+        F: FnMut(Self::Item) -> Option<B>;
+
 ### Building Collections: collect and FromIterator
+
+Naturally, **collect** itself doesn't know how to construct all these types. Rather, when some collection type like **Vec** or **HashMap** knows how to construct itself from an iterator, it implements the **std::iter::FromIterator** trait, for which **collect** is just a convenient veneer:
+
+    trait FromIterator<A>: Sized {
+        fn from_iter<T: IntoIterator<Item=A>>(iter: T) -> Self;
+    }
+
+If a collection type implements **FromIterator<A>**, then its type-associated function **from_iter** builds a value of that type from an iterable producing items of type A.
+
+This is where the **Iterator** trait's **size_hint** method comes in:
+
+    trait Iterator {
+        ...
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            (0, None)
+        }
+    }
+
+This method returns a lower bound and optional upper bound on the number of items the iterator will produce. The default definition returns zero as the lower bound and declines to name an upper bound, saying, in effect, "I have no idea," but many iterators can do better than this.
+
 
 ### The Extend Trait
 
