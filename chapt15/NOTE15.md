@@ -401,9 +401,38 @@ This method returns a lower bound and optional upper bound on the number of item
 
 ### The Extend Trait
 
+If a type implements the **std::iter::Extend** trait, then its **extend** method adds an iterable's items to the collection. 
+All of the standard collections implement **Extend**, so they all have this method; so does **String**. Arrays and slices, which have a fixed length, do not.
+
+The trait's definition is as follows:
+
+    trait Extend<A> {
+        fn extend<T>(&mut self, iter: T)
+            where T: IntoItterator<Item=A>;
+    }
+
+
 ### partition
+
+The **partition** method divides an iterator's items among two collections, using a colsure to decide where each item belongs.
+
+Like **collect**, **partition** can make any sort of collections you like, although both must be of the same type. And like **collect**, you'll need to specify the return type.
+
+The signature of **partition** is as follows:
+
+    fn partition<B, F>(self, f: F) -> (B, B)
+        where Self: Sized,
+              B: Default + Extend<Self::Item>,
+              F: FnMut(&Self::Item) -> bool;
+
 
 ### for_each and try_for_each
 
+The **for_each** method simply applies a closure to each item.
+
+If your closure needs to be fallible or exit early, you can use **try_for_each**.
+
 ## Implementing Your Own Iterators
+
+Iterators are the embodiment of Rust's philosophy of providing pwoerful, zero-cost abstractions that improve the expressiveness and readability of code. Iterators don't replace loops entirely, but they do provide a capable primitive with build-in lazy evaluation and excellent performance.
 

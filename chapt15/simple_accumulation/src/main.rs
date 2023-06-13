@@ -190,5 +190,80 @@ fn main() {
         Some(("Portland", "Mt. Tabor Park")));
     */
     
+    // The Extend Trait
+    let mut v: Vec<i32> = (0..5).map(|i| 1 << i).collect();
+    v.extend(&[31, 57, 99, 163]);
+    assert_eq!(v, &[1, 2, 4, 8, 16, 31, 57, 99, 163]);
+
+    // for_each and try_for_each
+    ["doves", "hens", "birds"].iter()
+        .zip(["turtle", "french", "calling"].iter())
+        .zip(2..5)
+        .rev()
+        .map(|((item, kind), quantity)| {
+            format!("{} {} {}", quantity, kind, item)
+        })
+        .for_each(|gift| {
+            println!("You have received: {}", gift);
+        });
+
+        use std::sync::mpsc::channel;
+
+        let (tx, rx) = channel();
+        (0..5).map(|x| x * 2 + 1)
+            .for_each(move |x| tx.send(x).unwrap());
+
+        let v: Vec<_> = rx.iter().collect();
+        assert_eq!(v, vec![1, 3, 5, 7, 9]);
+
+        (0..5).flat_map(|x| x * 100 .. x * 110)
+            .enumerate()
+            .filter(|&(i, x)| (i + x) % 3 == 0)
+            .for_each(|(i, x)| println!("{i}:{x}"));
+
+        // try_for_each
+        use std::fs::rename;
+        use std::io::{stdout, Write};
+        use std::path::Path;
+
+    let res = ["doves", "hens", "birds"].iter()
+        .zip(["turtle", "french", "calling"].iter())
+        .zip(2..5)
+        .rev()
+        .map(|((item, kind), quantity)| {
+            format!("{} {} {}", quantity, kind, item)
+        })
+        .try_for_each(|gift| {
+            writeln!(stdout(), "You have received: {}", gift)
+        });
+
+        assert!(res.is_ok());
+        
+
+        let data = ["no_tea.txt", "stale_bread.json", "torrential_rain.png"];
+
+        let res = data.iter().try_for_each(|x| writeln!(stdout(), "{x}"));
+        assert!(res.is_ok());
+
+        let mut it = data.iter().cloned();
+        let res = it.try_for_each(|x| rename(x, Path::new(x).with_extension("old")));
+        assert!(res.is_err());
+        // It short-circuited, so the remaining items are still in the iterator:
+        assert_eq!(it.next(), Some("stale_bread.json"));
+
+    // The ControlFlow type can be used with this method for the situations in which
+    // you'd use break and continue in a normal loop
+    use std::ops::ControlFlow;
+
+    let r = (2..100).try_for_each(|x| {
+        if 323 % x == 0 {
+            return ControlFlow::Break(x)
+        }
+
+        ControlFlow::Continue(())
+    });
+    assert_eq!(r, ControlFlow::Break(17));
+
+        
 
 }
