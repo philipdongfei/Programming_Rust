@@ -99,4 +99,99 @@ fn main() {
     assert_eq!([[1, 2], [3, 4], [5, 6]].join(&0),
         vec![1, 2, 0, 3, 4, 0, 5, 6]);
 
+    // Splitting
+    // splitn, rsplitn
+    let v = [10, 40, 30, 20, 60, 50];
+    println!("splitn:");
+    for group in v.splitn(2, |num| *num % 3 == 0){
+        println!("{group:?}");
+    }
+    println!("rsplitn:");
+    for rgroup in v.rsplitn(2, |num| *num % 3 == 0){
+        println!("{rgroup:?}");
+    }
+    // chunks
+    let slice = ['l', 'o', 'r', 'e', 'm'];
+    let mut iter = slice.chunks(2);
+    assert_eq!(iter.next().unwrap(), &['l', 'o']);
+    assert_eq!(iter.next().unwrap(), &['r', 'e']);
+    assert_eq!(iter.next().unwrap(), &['m']);
+    assert!(iter.next().is_none());
+    // windows
+    let slice = ['r', 'u', 's', 't'];
+    let mut iter = slice.windows(3);
+    assert_eq!(iter.next().unwrap(), &['r', 'u', 's']);
+    assert_eq!(iter.next().unwrap(), &['u', 's', 't']);
+    assert!(iter.next().is_none());
+
+    let slice = ['f', 'o', 'o'];
+    let mut iter = slice.windows(4);
+    assert!(iter.next().is_none());
+
+    // swap
+    let mut v = vec!["foo", "bar", "baz", "qux"];
+
+    assert_eq!(v.swap_remove(1), "bar");
+    assert_eq!(v, ["foo", "qux", "baz"]);
+
+    assert_eq!(v.swap_remove(0), "foo");
+    assert_eq!(v, ["baz", "qux"]);
+
+    // Sorting and Searching
+    let mut floats = [5f64, 4.0, 1.0, 3.0, 2.0];
+    floats.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    assert_eq!(floats, [1.0, 2.0, 3.0, 4.0, 5.0]);
+    
+    let mut v = [5, 4, 1, 3, 2];
+    v.sort_by(|a, b| a.cmp(b));
+    assert!(v == [1, 2, 3, 4, 5]);
+
+    // reverse sorting
+    v.sort_by(|a, b| b.cmp(a));
+    assert!(v == [5, 4, 3, 2, 1]);
+
+    let mut v = [-5i32, 4, 1, -3, 2];
+
+    v.sort_by_key(|k| k.abs());
+    assert!(v == [1, 2, -3, 4, -5]);
+
+    // binary_search
+    let s = [0, 1, 1, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55];
+
+    assert_eq!(s.binary_search(&13), Ok(9));
+    assert_eq!(s.binary_search(&4), Err(7));
+    assert_eq!(s.binary_search(&100), Err(13));
+    let r = s.binary_search(&1);
+    assert!(match r { Ok(1..=4) => true, _ => false,  });
+
+    // contains
+    let v = [10, 40, 30];
+    assert!(v.contains(&30));
+    assert!(!v.contains(&50));
+
+    let v = [String::from("hello"), String::from("world")]; // slice of  `String`
+    assert!(v.iter().any(|e| e == "hello")); // search with `&str`
+    assert!(!v.iter().any(|e| e == "hi"));
+
+    // Comparing Slices
+    assert_eq!([1, 2, 3, 4].starts_with(&[1, 2]), true);
+    assert_eq!([1, 2, 3, 4].starts_with(&[2, 3]), false);
+    assert_eq!([1, 2, 3, 4].ends_with(&[3, 4]), true);
+
+    // Random Elements
+    use rand::seq::IteratorRandom;
+
+    let mut rng = rand::thread_rng();
+
+    let faces = "😀😎😐😕😠😢";
+    println!("I am {}!", faces.chars().choose(&mut rng).unwrap());
+
+    use rand::seq::SliceRandom;
+    use rand::thread_rng;
+
+    let mut my_vec = ["a", "b", "c", "d", "e"];
+    my_vec.shuffle(&mut rng);
+    println!("{my_vec:?}");
+
+
 }

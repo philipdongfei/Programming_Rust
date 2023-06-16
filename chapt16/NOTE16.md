@@ -130,20 +130,113 @@ Two methods work on *arrays of arrays*, by which we mean any array, slice, or ve
 
 ### Splitting
 
+Rust has several methods that can borrow **mut** references to two or more parts of an array, slice, or vector at once. Unlike the preceding code, these methods are safe, because by design, they always split the data into *nonoverlapping* regions.
+None of these methods directly modifies an array, slice, or vector; they merely return new references to parts of the data inside.
+
+**slice.split(is_sep)**, **slice.split_mut(is_sep)**
+    Split **slice** into one or more subslices, using the function or 
+    closure **is_sep** to figure out where to split. They return an
+    iterator over the subslices.
+    As you consume the iterator, it calls **is_sep(&element)** for each
+    element in the slice. If **is_sep(&element)** is true, the element
+    is a separator. Separators are not include in any output subslice.
+    The output always contains at least one subslice, plus one per
+    separator. Empty subslices are included whenever separators appear
+    adjacent to each other or to the ends of **slice**.
+**slice.splitn(n, is_sep)**, **slice.rsplit_mut(is_sep)**
+    The same but they produce at most n subslices. After the first n-1
+    slices are found, **is_sep** is not called again. The last subslice
+    contains all the remaining elements.
+**slice.windows(n)**
+    Returns an iterator that behaves like a "sliding window" over the
+    data in **slice**.
+    If n is greater than the length of **slice**, then no slices are
+    produced. If n is 0, the method panics.
+    Because the subslices overlap, there is no variation of this method 
+    that returns mut references.
+
 ### Swapping
+
+**slice_a.swap(&mut slice_b)**
+    Swaps the entire contents of **slice_a** and **slice_b.slice_a** and
+    **slice_b** must be the same length.
+
+**vec.swap_remove(i)**
+    Removes and returns vec[i]. This is like **vec.remove(i)** except that
+    instead of sliding the rest of the vector's elements over to close the
+    gap, it simply moves vec's last element into the gap. It's useful when
+    you don't care about the order of the items left in the vector.
 
 ### Sorting and Searching
 
+**slice.sort_by(cmp)**
+    Sorts the elements of **slice** using a function or closure **cmp** to
+    specify the sort order.**cmp** must implement 
+    **Fn(&T, &T) -> std::cmp::Ordering**.
+
+**slice.sort_by_key(key)**
+    Sorts the elements of slice into increasing order by a sort key, given
+    by the function or closure key. The type of key must implement
+    **Fn(&T) -> K** where **K: Ord**.
+    This is useful when T contains one or more ordered fields, so that it
+    could be sorted multiple ways.
+    Note that these sort-key values are not cached during sorting, so the
+    **key** function may be called more than *n* times.
+    For technical reasons, **key(element)** can't return any references
+    borrowed from the element.
+
+**slice.binary_search(&value)**, **slice.binary_search_by(&value, cmp)**,
+**slice.binary_search_by_key(&value, key)**
+    All search for value in the given sorted slice. Note that value is 
+    passed by reference.
+    The return type of these methods is **Result<usize, uszie>**. They
+    return **Ok(index)** if **slice[index]** equals **value** under the
+    specified sort order. If there is no such index, then they return
+    **Err(insertion_point)** such that inserting **value** at 
+    **insertion_point** would preserve the order.
+Of course, a binary search only works if the slice is in fact sorted in the specified order. Otherwise, the results are arbitrary--garbage in, garbage out.
+**slice.contains(&value)**
+    Returns **true** if any element of **slice** is equal to **value**.
+    This simply checks each element of slice until a match is found. 
+    Again, **value** is passed by reference.
+
+
 ### Comparing Slices
+
+If a type **T** supports the == and != operators, then arrays **[T; N]**, slices **[T]**, and vectors **Vec<T>** support them too. Two slices are equal if they're the same length and their corresponding elements are equal.
+If **T** supports the operators **<, <=, >**, and **>=**, then arrays, slices, and vectors of **T** do too.
+
 
 ### Random Elements
 
+Random numbers are not build into the Rust standard library. The **rand** crate, which provides them, offers these two methods for getting random output from an array, slice, or vector.
+
 ### Rust Rules Out Invalidation Errors
+
+Most mainstream programming languages have collections and iterators, and they all have some variation on this rule: don't modify a collection while you're iterating over it.
+
+Having an error pointed out to you is nice, but of course, you still need to find a way to get the desired behavior! The easiest fix here is to write:
+
+    my_vec.retain(|&val| val <= 4);
+
+Or, you can do what you'd do in Python or any other language: create a new vector using a **filter**.
 
 
 ## VecDeque<T>
 
+Rust's **std::collections::VecDeque<T>** is a *deque*, a double-ended queue. 
+The implementation of **VecDeque** is a ring buffer.
+Because deques don't store their elements contiguously in memory, they can't inherit all the methods of slices.
+
+
 ## BinaryHeap<T>
+
+A **BinaryHeap** is a collection whose elements are kept loosely organized so that the greatest value always bubbles up to the front of the queue.
+
+This makes **BinaryHeap** useful as a work queue. You can define a task struct that implements **Ord** on the basis of priority so that higher-priority tasks are **Greater** than lower-priority tasks. Then, create a **BinaryHeap** to hold all pending tasks. Its **.pop()** method will always return the most important item, the task your program should work on next.
+
+Note: **BinaryHeap** is iterable, and it has an **.iter()** method, but the iterators produce the heap's elements in an arbitrary order, not from greatest to least. To consume values from a **BinaryHeap** in order of priority, use a while loop.
+
 
 ## HashMap<K, V> and BTreeMap<K, V>
 
