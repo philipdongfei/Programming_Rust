@@ -240,6 +240,46 @@ Note: **BinaryHeap** is iterable, and it has an **.iter()** method, but the iter
 
 ## HashMap<K, V> and BTreeMap<K, V>
 
+A *map* is a collection of key-value pairs (called *entries*). No two entries have the same key, and the entries are kept organized so that if you have a key, you can efficiently look up the coresponding value in a map. In short, a map is a lookup table.
+The Rust standard library uses B-trees rather than balanced binary trees because B-trees are faster on modern hardware. A binary tree may use fewer comparisons per search than a B-tree, but searching a B-tree has better *locality*--that is, the memory accesses are grouped together rather than scattered across the whole heap. This makes CPU cache misses rarer. It's a significant speed boost.
+
+* **HashMap::with_capacity(n)**
+    Creates a new, empty hash map with room for at least *n* entries. 
+    **HashMap**s, like vectors, store their data in a single heap
+    allocation, so they have a capacity and the related methods 
+    **hash_map.capacity()**, **hash_map.reserve(additional)**, and 
+    **hash_map.shrink_to_fit()**. **BTreeMap**s do not.
+
+* **map.get_mut(&key)**
+    Similar, but it returns a mut reference to the value.
+    In general, maps let you have *mut* access to the values stored inside
+    them, but not the keys. The values are yours to modify however you like
+    . The keys belong to the map itself; it needs to ensure that they don't
+    change, because the entries are organized by their keys. Modifying a 
+    key in-place would be a bug.
+
+* **btree_map.split_off(&key)**
+    Splits **btree_map** in two. Entries with keys less the key are left
+    in **btree_map**. Returns a new **BTreeMap<K, V>** containing the other
+    entries.
+
+### Entries
+
+Both **HashMap** and **BTreeMap** have a corresponding **Entry** type. The point of entries is to eliminate redundant map lookups.
+
+The idea with entries is that we do the lookup just once, producing an **Entry** value that is then used for all subsequent operations. This one-liner is equivalent to all the preceding code, except that it does the lookup only once:
+
+    let record = student_map.entry(name.to_string()).or_insert_with(Student::new);
+
+The **Entry** value returned by **student_map.entry(name.to_string())** acts like a mutable reference to a place within the map that's either *occupied* by a key-value pair, or *vacant*, meaning there's no entry there yet. If vacant, the entry's **.or_insert_with()** method inserts a new **Student**. Most uses of entries are like this: short and sweet.
+
+
+### Map Iteration
+    
+* Iterating by value **(for (k, v) in map)** produces **(K, V)** pairs. This consumes the map.
+* Iterating over a shared reference **(for (k, v) in &map)** produces **(&K, &V)** pairs.
+* Iterating over a mut reference **(for (k, v) in &mut map)** produces **(&K, &mut V)** pairs.
+
 ## HashSet<T> and BTreeSet<T>
 
 ## Hashing
