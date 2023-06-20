@@ -282,10 +282,55 @@ The **Entry** value returned by **student_map.entry(name.to_string())** acts lik
 
 ## HashSet<T> and BTreeSet<T>
 
+*Sets* are collections of values arranged for fast membership testing.
+A set never contains multiple copies of the same value.
+
+### Set Iteration
+
+There are two ways to iterate over sets:
+* Iterating by value (**"for v in set"**) produces the members of the set (and consumes the set).
+* Iterating by shared reference (**"for v in &set"**) produces shared references to the members of the set.
+
+Iterating over a set by **mut** reference is not supported. There's no way to get a **mut** reference to a value stored in a set.
+
+### When Equal Values Are Different
+
+Sets have a few odd methods that you need to use only if you care about differences between "equal" values.
+Such differences do often exist. Two identical **String** values, for example, store their characters in different locations in memory.
+
+
+### Whole-Set Operations
+
+So far, most of the set methods we've seen are focused on a single value in a single set. Sets also have methods that operate on whole sets.
+
+
 ## Hashing
+
+**HashMap** keys and **HashSet** elements must implement both **Hash** and **Eq**.
+Most built-in types that implement **Eq** also implement **Hash**. The integer types, char, and String are all hashable; so are tuples, arrays, slices, and vectors, as long as their elements are hashable.
+One principle of the standard library is that a value should have the same hash code regardless of where you store it or how you point to it.
+Structs and enums don't implement Hash by default, but an implementation can be derived:
+
+    /// The ID number for an object in the British Museum's collection.
+    #[derive(Clone, PartialEq, Eq, Hash)]
+    enum MuseumNumber {
+        ...
+    }
+
+This works as long as the type's fields are all hashable.
+If you implement PartialEq by hand for a type, you should also implement Hash by hand.
 
 ## Using a Custom Hashing Algorithm
 
+The hash method is generic, so the Hash implementations shown earlier can feed data to any type that implements Hasher. This is how Rust supports pluggable hashing algorithms.
+A third trait, **std::hash::BuildHasher**, is the trait for types that reperesent the initial state of a hashing algorithm. Each Hasher is single use, like an iterator: you use it once and throw it away. A **BuildHasher** is reusable.
+Every **HashMap** contains a **BuildHasher** that is uses each time it needs to compute a hash code. The **BuildHasher** value contains the key, initial state, or other parameters that the hashing algorithm needs every time it runs.
+Rust's default hashing algorithm is a well-know algorithm called SipHash-1-3. SipHash is fast, and it's very good at minimizing hash collisions. In fact, it's a crypto-graphic algorithm: there's no known efficient way to generate SipHash-1-3 collisions.
+
+
 ## Beyond the Standard Collections
+
+For now, we'll just bask in the warm glow of the standard collections and their safe, efficient APIs. Like much of the Rust standard library, they're designed to ensure that the need to write unsafe is as rare as possible.
+
 
 
