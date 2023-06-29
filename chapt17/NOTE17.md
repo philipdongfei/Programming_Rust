@@ -127,26 +127,91 @@ Otherwise, Rust will be confused by the fixed-size array type **&[char; 2]**, wh
 
 ### Searching and Replacing
 
+Rust has a few methods for searching for patterns in slices and possibly replacing them with new text.
+
+* **slice.contains(pattern)**
+* **slice.starts_with(pattern), slice.ends_with(pattern)**
+* slice.find(pattern), slice.rfind(pattern)**
+* **slice.replace(pattern, replacement)**
+* **slice.replacen(pattern, replacement, n)**
+
 
 ### Iterating over Text
 
+The standard library provides several ways to iterate over a slice's text.
+
+* **slice.chars()**
+* **slice.char_indices()**
+* **slice.bytes()**
+* **slice.lines()**
+* **slice.split(pattern)**
+* **slice.rsplit(pattern)**
+* **slice.split_terminator(pattern), slice.rsplit_terminator(pattern)**
+* **slice.splitn(n, pattern), slice.rsplitn(n, pattern)**
+* **slice.split_whitespace(), slice.split_ascii_whitespace()**
+* **slice.matches(pattern)**
+* **slice.match_indices(pattern), slice.rmatch_indices(pattern)**
+
+
 ### Trimming
+
+To *trim* a string is to remove text, usually whitespace, from the beginning or end of the string.
+
+* **slice.trim()**
+* **slice.trim_matches(pattern)**
 
 ### Case Conversion for Strings
 
+The methods **slice.to_uppercase()** and **slice.to_lowercase()** return a freshly allocated string holding the text of **slice** converted to uppercase or lowercase.
+
 ### Parsing Other Types from Strings
+
+Rust provides standard traits for both parsing values from strings and producing textual representations of values.
+
 
 ### Converting Other Types to Strings
 
+There are three main ways to convert nontextual values to strings:
+
+* Types that have a natural human-readable printed form can implement the **std::fmt::Display** trait, which lets you use the {} format specifier in the **format!** macro. The smart pointer types **Box<T>**, **Rc<T>**, and **Arc<T>** implement **Display** if T itself does: Their displayed form is simply that of their referent.
+* If a type implements **Display**, the standard library automatically implements the **std::str::ToString** trait for it, whose sole method **to_string** can be more convenient when you don't need the flexibility of **format!**.
+* Every public type in the standard library implements **std::fmt::Debug**, which takes a value and formats it as a string in a way helpful to programmers. The easiest way to use **Debug** to produce a string is via the **format!** macro's {:?} format specifier.
+
 ### Borrowing as Other Text-Like Types
+
+You can borrow a slice's contents in several different ways:
+
+* Slices and Strings implement **AsRef<str>**, **AsRef<[u8]>**, **AsRef<Path>**, and **AsRef<OsStr>**.
+* Slices and strings also implement the **std::borrow::Borrow<str>** trait.
 
 ### Accessing Text as UTF-8
 
+There are two main ways to get at the bytes representing text, depending on whether you want to take ownership of the bytes or just borrow them:
+
+* **slice.as_bytes()**
+* **string.into_bytes()**
+
 ### Producing Text from UTF-8 Data
+
+If you have a block of bytes that you believe contains UTF-8 data, you have a few options for converting them into **Strings** or slices, depending on how you want to handle errors:
+
+* **str::from_utf8(byte_slice)**
+* **String::from_utf8(vec)**
+* **String::from_utf8_lossy(byte_slice)**
+* **String::from_utf8_unchecked**
+* **str::from_utf8_unchecked**
 
 ### Putting Off Allocation
 
+This dynamic character is the hint to consider using **std::borrow::Cow**, the clone-on-write type that can hold either owned or borrowed data.
+**Cow<'a, T>** isan enum with two variants: **Owned** and **Borrowed**. **Borrowed** holds a reference **&'a T**, and **Owned** holds the owning version of **&T: String** for **&str**, **Vec<i32>** for **&[i32]**, and so on. Whether **Owned** or **Borrowed**, a **Cow<'a, T>** can always produce a **&T** for you to use. 
+
+Keep in mind that not every **Cow<..., str>** must be **'static**: you can **Cow** to borrow previously computed text until the moment a copy becomes necessary.
+
 ### Strings as Generic Collections
+
+**String** implements both **std::default::Default** and **std::iter::Extend: default** returns an empty string, and **extend** can append characters, string slices, **Cow<..., str>**s, or strings to the end of a string.
+The **&str** type also implements **Default**, returning an empty slice.
 
 ## Formatting Values
 
