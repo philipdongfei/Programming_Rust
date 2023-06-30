@@ -1,3 +1,30 @@
+fn logging_enabled() -> bool { true }
+use std::fs::OpenOptions;
+use std::io::Write;
+
+fn write_log_entry(entry: std::fmt::Arguments) {
+    if logging_enabled() {
+        // Keep things simple for now, and just
+        // open the file every time.
+        let mut log_file = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open("log-file-name")
+            .expect("failed to open log file");
+
+        log_file.write_fmt(entry)
+            .expect("failed to write to log");
+    }
+}
+
+macro_rules! log { // no ! needed after name in macro definitions
+    ($format:tt, $($arg:expr),*) => (
+        write_log_entry(format_args!($format, $($arg),*))
+    )
+}
+
+
+
 fn main() {
     // creating string values 
     let spacey = "man hat tan";
@@ -234,6 +261,186 @@ His house is in the village though;\n");
 
         assert_eq!("💖", sparkle_heart);
 
+        // formatting text values
+        // default
+        println!("{}", "bookends");
+        // minimum field width
+        println!("{:4}", "bookends");
+        println!("{:12}", "bookends");
+        // text length limit
+        println!("{:.4}", "bookends");
+        println!("{:.12}", "bookends");
+        // field width, length limit
+        println!("{:12.20}", "bookends");
+        println!("{:4.20}", "bookends");
+        println!("{:4.6}", "bookends");
+        println!("{:6.4}", "bookends");
+        // aligned left, width
+        println!("{:<12}", "bookends");
+        // centered,width
+        println!("{:^12}", "bookends");
+        // aligned right, width
+        println!("{:>12}", "bookends");
+        // pad with '=', centered, width
+        println!("{:=^12}", "bookends");
+        // pad '*', aligned right, width, limit
+        println!("{:*>12.4}", "bookends");
 
+        assert_eq!(format!("{:4}", "th\u{e9}"), "th\u{e9} ");
+        assert_eq!(format!("{:4}", "the\u{301}"), "the\u{301}");
 
+        use std::path::Path;
+        let path = Path::new("./foo/bar.txt");
+        println!("processing file: {}", path.display());
+
+        // Formatting Numbers
+        // format string directives for integers
+        println!("format string directives for integers:");
+        // Default
+        println!("{}", 1234);
+        // forced sign
+        println!("{:+}", 1234);
+        // minimum field width
+        println!("{:12}", 1234);
+        println!("{:2}", 1234);
+        // sign, width 
+        println!("{:+12}", 1234);
+        // leading zeros, width
+        println!("{:012}", 1234);
+        // sign,zeros, width
+        println!("{:+012}", 1234);
+        // aligned left, width
+        println!("{:<12}", 1234);
+        // centered, width
+        println!("{:^12}", 1234);
+        // aligned right, width
+        println!("{:>12}", 1234);
+        // aligned left, sign, width
+        println!("{:<+12}", 1234);
+        // centered, sign, width
+        println!("{:^+12}", 1234);
+        // aligned right, sign, width
+        println!("{:>+12}", 1234);
+        // binary notation
+        println!("{:b}", 1234);
+        // width,octal notation
+        println!("{:12o}", 1234);
+        // sign, width, hexadecimal notation
+        println!("{:+12x}", 1234);
+        // sign, width, hex with capital digits
+        println!("{:+12X}", 1234);
+        // sign, explicit radix prefix, width, hex
+        println!("{:+#12x}", 1234);
+        // sign, radix, zeros, width, hex
+        println!("{:+#012x}", 1234);
+        println!("{:+#06x}", 1234);
+        // format string directives for floating-point numbers
+        println!("format string directives for floating-point numbers:");
+        // default
+        println!("{}", 1234.5678);
+        // precision
+        println!("{:.2}", 1234.5678);
+        println!("{:.6}", 1234.5678);
+        // minimum field width
+        println!("{:12}", 1234.5678);
+        // minimum, precision
+        println!("{:12.2}", 1234.5678);
+        println!("{:12.6}", 1234.5678);
+        // leading zeros, minimum, precision
+        println!("{:012.6}", 1234.5678);
+        // scientific
+        println!("{:e}", 1234.5678);
+        // scientific, precision
+        println!("{:.3e}", 1234.5678);
+        // scientific, minimum, precision
+        println!("{:12.3e}", 1234.5678);
+        println!("{:12.3E}", 1234.5678);
+
+        // formatting values for debugging 
+        use std::collections::HashMap;
+        let mut map = HashMap::new();
+        map.insert("Portland", (45.5237606, -122.6819273));
+        map.insert("Taipei", (25.0375167, 121.5637));
+        println!("{:?}", map);
+        println!("{:#?}", map);
+
+        println!("ordinary: {:02?}", [9, 15, 240]);
+        println!("hex:      {:02x?}",[9, 15, 240]);
+
+        #[derive(Copy, Clone, Debug)]
+        struct Complex { re: f64, im: f64 }
+        let third = Complex { re: -0.5, im: f64::sqrt(0.75) };
+        println!("{:?}", third);
+
+        // formatting pointers for debugging
+        use std::rc::Rc;
+        let original = Rc::new("mazurka".to_string());
+        let cloned = original.clone();
+        let impostor = Rc::new("mazurka".to_string());
+        println!("text:     {}, {}, {}", original, cloned, impostor);
+        println!("pointers: {:p}, {:p}, {:p}", original, cloned, impostor);
+        // referring to arguments by index or name
+        assert_eq!(format!("{1},{0},{2}", "zeroth", "first", "second"),
+            "first,zeroth,second");
+        assert_eq!(format!("{2:#06x},{1:b},{0:=>10}", "first",10,100),
+            "0x0064,1010,=====first");
+        assert_eq!(format!("{description:.<25}{quantity:2} @ {price:5.2}",
+                price=3.25,
+                quantity=3,
+                description="Maple Turmeric Latte"),
+            "Maple Turmeric Latte..... 3 @  3.25");
+        assert_eq!(format!("{mode} {2} {} {}",
+                "people", "eater", "purple", mode="flying"),
+            "flying purple people eater");
+        // dynamic widths and precisions
+        use std::fmt;
+
+        {
+            println!("it would be nice if Complex values printed themselves n the usual a + bi form.");
+            impl fmt::Display for Complex {
+                fn fmt(&self, dest: &mut fmt::Formatter) -> fmt::Result {
+                    let im_sign = if self.im < 0.0 {'-'} else {'+'};
+                    write!(dest, "{} {} {}i", self.re, im_sign, f64::abs(self.im))
+                }
+            }
+            let one_twenty = Complex { re: -0.5, im: 0.866 };
+            assert_eq!(format!("{}", one_twenty),
+                "-0.5 + 0.866i");
+
+            let two_forty = Complex { re: -0.5, im: -0.866 };
+            assert_eq!(format!("{}", two_forty),
+                "-0.5 - 0.866i");
+        }
+
+        {
+            #[derive(Copy, Clone, Debug)]
+            struct Complex { re: f64, im: f64 }
+            println!("The # character in a format parameter typically selects some alternate display form;");
+            impl fmt::Display for Complex {
+                fn fmt(&self, dest: &mut fmt::Formatter) -> fmt::Result {
+                    let (re, im) = (self.re, self.im);
+                    if dest.alternate() {
+                        let abs = f64::sqrt(re * re + im * im);
+                        let angle = f64::atan2(im, re) / std::f64::consts::PI * 180.0;
+                        write!(dest, "{} ∠ {}°", abs, angle)
+                    } else {
+                        let im_sign = if im < 0.0 { '-'  } else { '+' };
+                        write!(dest, "{} {} {}i", re, im_sign, f64::abs(im))
+                    }
+                }
+            }
+            let ninety = Complex { re: 0.0, im: 2.0 };
+            assert_eq!(format!("{}", ninety),
+                "0 + 2i");
+            assert_eq!(format!("{:#}", ninety),
+                "2 ∠ 90°");
+        }
+
+        let mysterious_value = "test write_log_entry function.";
+
+        write_log_entry(format_args!("Hark! {:?}\n", mysterious_value));
+
+        let mysterious_value = "test macro_rules! macro.";
+        log!("O day and night, but this is wondrous strange! {:?}\n",
+            mysterious_value);
 }

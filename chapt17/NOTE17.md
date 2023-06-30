@@ -215,6 +215,103 @@ The **&str** type also implements **Default**, returning an empty slice.
 
 ## Formatting Values
 
+Several standard library features share this little language for formatting strings:
+
+* The **format!** macro uses it to build **String**s.
+* The **println!** and **print!** macros write formatted text to the standard output stream.
+* The **writeln!** and **write!** macros write it to a designated output stream.
+* The **panic!** macro uses it to build an (ideally informative) expression of terminal dismay.
+
+The template's {...} forms are called *format parameters* and have the form {*which:how*}. Both parts are optional; {} is frequently used.
+The *which* value selects which argument following the template should take the parameter's place. You can select arguments by index or by name. Parameters with no *which* value are simply paired with arguments from left to right.
+The *how* value says how the argument should be formatted: how much padding, to which precision, in which numeric radix, and so on. If *how* is present, the colon before it is required.
+
+
+### Formatting Text Values
+
+When formatting a textual type like **&str** or **String** (**char** is treated like a single character string), the *how* value of a parameter has serveral parts, all optional:
+
+* A *text length limit*. Rust truncates your argument if it is longer than this. If you specify no limit, Rust uses the full text.
+* A *minimum field width*. After any trucation, if your argument is shorter than this, Rust pads it on the right (by default) with spaces (by default) to make a field of this width. If ommitted, Rust donesn't pad your argument.
+* An *alignment*. If your argument needs to be padded to meet the minimum field width, this says where your text should be placed within the field.
+* A *padding* character to use in this padding process. If ommitted, Rust uses spaces. If you specify the padding character, you must also specify the alignment.
+
+Rust's formatter has a naïve understanding of width: it assumes each character occupies one column, with no regard for combining characters, half-width katakana, zero-width spaces, or the other messy realities of Unicode.
+
+Since filename paths are not necessarily well-formed UTF-8, **std::path::Path** isn't quite a textual type; you can't pass a **std::path::Path** directly to a formatting macro.
+
+
+### Formatting Numbers
+
+When the formatting argument has a numeric type like **usize** or **f64**, the parameter's *how* value has the following parts, all optional:
+
+* A *padding* and *alignment*, which work as they do with textual types.
+* A **+** character, requesting that the number's sign always be shown, even when the argument is positive.
+* A **#** character, requesting an explicit radix prefix like **0x** or **0b**.
+* A **0** character, requesting that the minimum field width be satisfied by including leading zeros in the number, instead of the usual padding approach.
+* A *minimum field width*. If the formatted number is not at least this wide, Rust pads it on the left (by default) with spaces (by default) to make a field of the given width.
+* A *precision* for floating-point arguments, indicating how many digits Rust should include after the decimal  point.
+* A *notation*. For integer types, this can be **b** for binary, **o** for octal, or **x** or **X** for hexadecimal with lower- or uppercase letters. If you included the **#** character, these include an explicit Rust-style radix prefix, **0b**, **0o**, **0x**, or **0X**.
+
+### Formatting Other Types
+
+Beyond strings and numbers, you can format several other standard library types:
+
+* Error types can all be formatted directly, making it easy to include them in error messages.
+* You can format internet protocol address types like **std::net::IpAddr** and **std::net::SocketAddr**.
+* The Boolean **true** and **false** values can be formatted, although these are usually not the best strings to present directly to end users.
+
+
+### Formatting Values for Debugging
+
+To help with debugging and logging, the {:?} parameter formats any public type in the Rust standard library in a way meant to be helpful to programmers.
+
+
+### Formatting Pointers for Debugging
+
+Normally, if you pass any sort of pointer to a formatting macro--a reference, a Box, an Rc--the macro simply follows the pointer and formats its referent; the pointer itself is not of interest. But when you're debugging, it's sometimes helpful to see the pointer: an address can serve as a rough "name" for an individual value, which can be illuminating when examining structures with cycles or sharing.
+
+### Referring to Arguments by Index or Name
+
+A format parameter can explicitly select which argument it uses.
+You can also select arguments by name.
+You can mix indexed, named, and positional (that is, no index or name) parameters together in a single formatting macro use. The positional parameters are paired with arguments from left to right as if the indexed and named parameters weren't there: 
+Named arguments must appear at the end of the list.
+
+### Dynamic Widths and Precisions
+
+A parameter's minimum field width, text length limit, and numeric precision need not always be fixed values; you can choose them at run time.
+
+But if you'd like to choose the field width at run time, you can write:
+
+    format!("{:>1$}", content, get_width())
+
+Writing **1$** for the minimum field width tells **format!** to use the value of the second argument as the width. The cited argument must be a **usize**. You can also refer to the argument by name:
+
+    format!("{:>width$}", content, width=get_width())
+    format!("{:>width$.limit$}", content,
+        width=get_width(), limit=get_limit())
+
+In place of the text length limit or floating-point precision, you can also write *, which says to take the next positional argument as the precision. The following clips **content** to at most **get_limit()** characters:
+
+    format!("{:.*}", get_limit(), content)
+
+
+### Formatting Your Own Types
+
+The formatting traits all have the same structure, differing only in their names. We'll use **std::fmt::Display** as a representative:
+
+    trait Display {
+        fn fmt(&self, dest: &mut std::fmt::Formatter)
+            -> std::fmt::Result;
+    }
+
+The **fmt** method's job is to produce a properly formatted representation of **self** and write its characters to **dest**. In addition to serving as an output stream, the **dest** argument also carries details parsed from the format parameter, like the alignment and minimum field width.
+
+### Using the Formatting Language in Your Own Code
+
+You can write your own functions and macros that accept format templates and arguments by using Rust's **format_args!** macro and the **std::fmt::Arguments** type. 
+
 ## Regular Expressions
 
 ## Normalization
