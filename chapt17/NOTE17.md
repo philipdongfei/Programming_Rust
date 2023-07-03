@@ -314,6 +314,42 @@ You can write your own functions and macros that accept format templates and arg
 
 ## Regular Expressions
 
+The external *regex* crate is Rust's official regular expression library. It provides the usual searching and matching functions. It has good support for Unicode, but it can search byte strings as well.
+
+### Basic Regex Use
+
+A **Regex** value represents a parsed regular expression ready to use. The **Regex::new** constructor tries to parse a **&str** as a regular expression, and returns a **Result**.
+
+
+### Building Regex Values Lazily
+
+The **Regex::new** constructor can be expensive: constructing a **Regex** for a 1,200-character regular expression can take almost a milisecond on a fast developer machine, and even a trival expression takes microseconds.
+The **lazy_static** crate provides a nice way to construct static values lazily the first time they are used.
+
 ## Normalization
+
+Most users would consider the French word for tea, thé, to be three characters long. However, Unicode actually has two ways to represent this text:
+
+* In the *composed* form, thé comprises the three characters t, h, and é, where é is a single Unicode character with code point 0xe9.
+* In the *decomposed* form, thé comprises the four characters, t, h, e, and \u{301}, where the e is the plain ASCII character, without an accent, and code point 0x301 is the "combining acute accent" character, which adds an acute accent to whatever character it follows.
+
+### Normalization Forms
+
+Unicode defines four normalized forms, each of which is appropriate for different uses.
+
+* First, do you prefer characters to be as *composed* as possible or as *decomposed* as possible?
+The composed form generally has fewer compatibility problems, since it more closely matches the representations most languages used for their text before Unicode became established. It may also work better with naïve string formatting features like Rust's **format!** macro. The decomposed form, on the other hand, may be better for displaying text or searching, since it makes the detailed structure of the text more explicit.
+* The second question is: if two character sequences represent the same fundamental text but differ in the way that text should be formatted, do you want to treat them as equivalent or keep them distinct?
+
+
+Unicode Normalization Form C and Normalization Form D (NFC and NFD) use the maximally composed and maimally decomposed forms of each character, but do not try to unify compatibility equivalent sequences. The NFKC and NFKD Normalization forms are like NFC and NFD, but normalize all compatibility equivalent sequences to some simple representative of their class.
+
+### The unicode-normalization Crate
+
+Rust's **unicode-normalization** crate provides a trait that adds methods to **&str** to put the text in any of the four normalized forms.
+Although any substring of a normalized string is itself normalized, the concatenation of two normalized strings is not necessarily normalized.
+As long as a text uses no unassigned code points when it is normalized, Unicode promises that its normalized form will not change in future versions of the standard. This means that normalized forms are generally safe to use in persistent storage, even as the Unicode standard evolves.
+
+
 
 
