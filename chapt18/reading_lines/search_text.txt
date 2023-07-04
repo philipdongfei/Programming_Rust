@@ -1,0 +1,4 @@
+Note that a **File** is not automatically buffered. **File** implements
+**Read** but not **BufRead**. However, it's easy to create a buffered
+reader for a **File**, or any other unbuffereD reader. **BufReader::new(reader)**
+does this. (To set the size of the buffer, use **BufReader::with_capacity(size, reader)**.)
