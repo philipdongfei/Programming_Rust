@@ -93,14 +93,68 @@ When a **BufWriter** is dropped, all remaining buffered data is written to the u
 
 ### Files
 
+We've already seen two ways to open a file:
+
+**File::open(filename)**
+**File::create(filename)**
+
+Note that the File type is in the filesystem module, **std::fs**, not **std::io**.
+Once a **File** has been opened, it behaves like any other reader or writer. You can add a buffer if needed. The **File** will be closed automatically when you drop it.
+
 ### Seeking
+
+**File** also iimplements the **Seek** trait, which means you can hop around within a **File** rather than reading or writing in a single pass from the beginning to the end.
+
+    pub trait Seek {
+        fn seek(&mut self, pos: SeekFrom) -> io::Result<u64>;
+    }
+    
+    pub enum SeekFrom {
+        Start(u64),
+        End(i64), 
+        Current(i64)
+    }
+
+Seeking within a file is slow.
 
 ### Other Reader and Writer Types
 
+**io::stdin()**
+**io::stdout(), io::stderr()**
+**Vec<u8>**
+**Cursor::new(buf)**
+    Creates a **Cursor**, a buffered reader that reads from **buf**. This is how you create a reader that reads from a **String**.
+    Using a cursor to write past the end of a **Vec<u8>** is fine, though: it grows the vector.
+**std::net::TcpStream**
+**std::process::Command**
+**io::sink()**
+**io::empty()**
+**io::repeat(byte)**
+
 ### Binary Data, Compression, and Serialization
+
+The **byteorder** crate offers **ReadBytesExt** and **WriteBytesExt** traits that add methods to all readers and writers for binary input and output:
+The **flate2** crate provides adapter methods for reading and writing **gzip**ped data
+The **serde** crate, and its associated format crates such as **serde_json**, implement serialization and deserialization: they convert back and forth between Rust structs and bytes.
 
 
 ## Files and Directories
+
+
+### OsStr and Path
+
+**OsStr** is a string type that's a superset of UTF-8. Its job is to be able to represent all filenames, command-line arguments, and environment variables on the current system, *whether they're valid Unicode or not*. 
+So we have two string types: **str** for actual Unicode strings; and **OsStr** for whatever nonsense your operating sytem can dish out.
+Lastly, for each string types, there's a corresponding *owning* type: a **String** owns a heap-allocated **str**, a **Std::ffi::OsString** owns a heap-allocated **OsStr**, and a **std::path::PathBuf** owns a heap-allocated **Path**.
+
+
+### Path and PathBuf Methods
+
+### Filesystem Access Functions
+
+### Reading Directories
+
+### Platform-Specific Features
 
 
 ## Networking

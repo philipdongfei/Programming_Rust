@@ -33,10 +33,57 @@ fn test_writer() -> io::Result<()>
     Ok(())
 }
 
+fn test_file() -> io::Result<()>
+{
+    // File
+    use std::fs::OpenOptions;
+    let mut log = OpenOptions::new()
+        .append(true) // if file exists, add to the end
+        .open("server.log")?;
+    log.write_all(b"test server log");
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true) // fail if file exists
+        .open("new_file.txt")?;
+    file.write_all(b"test new_file.txt");
+    Ok(())
+
+}
+
+fn test_other() -> io::Result<()> {
+    use std::process::{Command, Stdio};
+
+    let mut child = 
+        Command::new("grep")
+        .arg("-e")
+        .arg("a.*e.*i.*o.*u")
+        .stdin(Stdio::piped())
+        .spawn()?;
+
+    let my_words = vec!["a one i o u".to_string(), "two".to_string(), 
+    "three".to_string(), "four".to_string(), "five".to_string()];
+    let mut to_child = child.stdin.take().unwrap();
+    for word in my_words {
+        writeln!(to_child, "{}", word)?;
+    }
+    drop(to_child);  // close grep's stdin, so it will exit
+    child.wait()?;
+    Ok(())
+} 
+
 fn main() {
+    let _ = test_other();
+    println!("test_file:");
+    let result = test_file();
+    if let Err(err) = result {
+        eprintln!("{}", err);
+        std::process::exit(1);
+    }
+    println!("test_writer:");
     let result = test_writer();
     if let Err(err) = result {
         eprintln!("{}", err);
         std::process::exit(1);
     }
+
 }
