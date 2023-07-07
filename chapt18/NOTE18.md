@@ -150,12 +150,36 @@ Lastly, for each string types, there's a corresponding *owning* type: a **String
 
 ### Path and PathBuf Methods
 
+**Path::new(str)**
+**path.parent()**
+**path.file_name()**
+**path.is_absolute(), path.is_relative()**
+**path1.join(path2)**
+**path.components()**
+**path.ancestors()**
+**path.to_str()**
+**path.to_string_lossy()**
+**path.display()**
+
 ### Filesystem Access Functions
 
+As you can see, Rust strives to provide portable functions that work predictably on Windows as well as macOS, Linux, and other Unix systems.
+
+
 ### Reading Directories
+
+**std::fs::read_dir()**
+**entry.file_name()**
+**entry.path()**
+**entry.file_type()**
+**entry.metadata()**
 
 ### Platform-Specific Features
 
 
 ## Networking
+
+For low-level networking code, start with the **std::net** module, which provides cross-platform support for TCP and UDP networking. Use the **native_tls** crate for SSL/TLS support.
+However, for high-performance servers, you'll need to use asynchronous input and output.
+Higher-level protocols are supported by third-party crates. For example, the **reqwest** crate offers a beautiful API for HTTP clients.
 
