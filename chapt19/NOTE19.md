@@ -132,6 +132,196 @@ This is easy to fix using Rayon. We can just fire off a parallel task for each r
 
 ## Channels
 
+A *channel* is a one-way conduit for sending values from one thread to another. In other words, it's a thread-safe queue.
+They're something like Unix pipes: one end is for sending data, and the other is for receiving. The two ends are typically owned by two different threads. But whereas Unix pipes are for sending bytes, channels are for sending Rust values.
+Rust channels are faster than Unix pipes. Sending a value moves it rather than copying it, and moves are fast even when you're moving data structures that contain many megabytes of data.
+
+### Sending Values
+
+### Receiving Values
+
+### Running the Pipeline
+
+Pipelines are like assembly lines in a manufacturing plant: performance is limited by the throughput of the slowest stage.
+
+### Channel Features and Performance
+
+The **mpsc** part of **std::sync::mpsc** stands for *multiproducer, single-consumer*, a terse description of the kind of communication Rust's channels provide.
+
+**Sender<T>** implements the **Clone** trait. To get a channel with multiple senders, simply create a regular channel and clone the sender as many times as you like. You can move each **Sender** value to a different thread.
+A **Receiver<T>** can't be cloned, so if you need to have multiple threads receiving values from the same channel, you need a **Mutex**.
+
+Here Rust again takes a page from Unix pipes. Unix uses an elegant trick to provide some *backpressure* so that fast senders are forced to slow down: each pipe on a Unix system has a fix size, and if a process tries to write to a pipe that's momentarily full, the system simply blocks that process until there's room in the pipe. The Rust equivalent is called a *synchronous channel*.
+A synchronous channel is exactly like a regular channel except that when you create it, you specify how many values it can hold. For a synchronous channel, **sender.send(value)** is potentially a blocking operation. After all, the idea is that blocking is not always bad.
+
+
+### Thread Safety: Send and Sync
+
+This is mostly true, but Rust's full thread safety story hinges on two built-in traits, **std::marker::Send** and **std::marker::Sync**.
+
+* Types that implement **Send** are safe to pass by value to another thread. They can be moved across threads.
+* Types that implement **Sync** are safe to pass by non-mut reference to another thread. They can be shared across threads.
+
+By *safe* here, we mean the same thing we always mean: free from data races and other undefined behavior.
+
+
+### Piping Almost Any Iterator to a Channel
+
+This is Rust's character in a nutshell: we're free to add a concurrency power tool to almost every iterator in the language--but not without first understanding and documenting the restrictions that make it safe to use.
+
+Traits allow us to add methods to standard library types, so we can actually do this. We start by writing a trait that declares the method we want:
+
+    use std::sync::mpsc;
+
+    pub trait OffThreadExt: Iterator {
+        /// Transform this iterator into an off-thread iterator: the
+        /// `next()` calls happen on a separate worker thread, so the
+        /// iterator and the body of your loop run concurrently.
+        fn off_thread(self) -> mpsc::IntoIter<Self::Item>;
+    }
+
+Then we implement this trait for iterator types. It helps that **mpsc::Receiver** is already iterable:
+
+    use std::thread;
+
+    impl<T> OffThreadExt for T
+        where T: Iterator + Send + 'static,
+        T::Item: Send + 'static
+    {
+        fn off_thread(self) -> mpsc::IntoIter<Self::Item> {
+            // Create a channel to transfer items from the worker thread.
+            let (sender, receiver) = mpsc::sync_channel(1024);
+
+            // Move this iterator to a new worker thread and run it there.
+            thread::spawn(move || {
+                for item in self {
+                    if sender.send(item).is_err() {
+                        break;
+                    }
+                }
+            });
+
+            // Return an iterator that pulls values from the channel.
+            receiver.into_iter()
+        }
+    }
+
+
+### Beyond Pipelines
+
+In this section, we used pipelines as our examples because pipelines are a nice, obvious way to use channels. Everyone understands them. They're concrete, practical, and deterministic. Channels are useful for more than just piplines, though. They're also a quick, easy way to offer any asynchronous service to other threads in the same process.
+
+The tools we've presented so far--fork-join for highly parallel computation, channels for loosely connecting components--are sufficient for a wide range of applications.
+
 ## Shared Mutable State
+ 
+The problem to be solved here is that many threads need access to a shared list of players who are waiting to join a game. This data is necessarily both mutable and shared across all threads.
+You could solve this by creating a new thread whose whole job is to manage this list. Other threads would communicate with it via channels.
+Another option is to use the tools Rust provides for safely sharing mutable data.
+
+### What Is a Mutex?
+
+A *mutex* (or *lock*) is used to force multiple threads to take turns when accessing certain data.
+
+Mutexes are helpful for serveral reasons:
+* They prevent *data races*, situations where racing threads concurrently read and write the same memory.
+* Even if data races didn't exist, even if all reads and writes happened one by one in program order, without a mutex the actions of different threads could interleave in arbitrary ways.
+* Mutexes support programming with *invariants*, rules about the protected data that are true by construction when you set it up and maintained by every critical section.
+
+### Mutex<T>
+
+The guard even lets us borrow direct references to the underlying data. Rust's lifetime system ensures those references can't outlive the guard itself. There is no way to access the data in a **Mutex** without holding the lock.
+When **guard** is dropped, the lock is released. Ordinarily that happens at the end of the block, but you can also drop it manually.
+
+### mut and Mutex
+
+In Rust **&mut** means *exclusive access*. Plain **&** means *shared access*.
+But **Mutex** does have a way: the lock. In fact, a mutex is little more than a way to do exactly this, to provide *exclusive* (mut) access to the data inside, even though many threads may have *shared* (non-mut) access to the **Mutex** itself.
+Rust's type system is telling us what **Mutex** does. It dynamically enforces exclusive access, something that's usually done statically, at compile time, by the Rust compiler.
+
+
+### Why Mutexes Are Not Always a Good Idea
+
+However, threads that use mutexes are subject to some other problems that Rust doesn't fix for you:
+
+* Valid Rust programs can't have data races, but they can still have other *race conditions*--situations where a program's behavior depends on timing among threads and may therefore vary from run to run.
+* Shared mutable state also affects program design. Where channels serve as an abstraction boundary in your code, making it easy to separate isolated components for testing, mutexes encourage a "just-add-a-method" way of working that can lead to a monolithic blob of interrelated code.
+* Lastly, mutexes are just not as simple as they seem at first, as the next two sections will show.
+
+All of these problems are inherent in the tools. Use a more structured approach when you can; use a Mutex when you must.
+
+
+### Deadlock
+
+To put it another way, the lock in a **Mutex** is not a recursive lock.
+Rust's borrow system can't protect you from deadlock. The best protection is to keep critical sections small: get in, do your work, and get out.
+It's also possible to get deadlock with channels. In a pipeline, like out inverted index builder, data flow is acyclic.
+
+### Poisoned Mutexes
+
+If a thread panics while holding a **Mutex**, Rust marks the **Mutex** as *poisoned*. Any subsequent attempt to **lock** the poisoned **Mutex** will get an error result.
+Rust poisons the mutex to prevent other threads from blundering unwittingly into this broken situation and make it worse. You *can* still lock a poisoned mutex and access the data inside, with mutual exclusion fully enforced; But you won't do it by accident.
+
+### Multiconsumer Channels Using Mutexes
+
+We can add a **Mutex** around the **Receiver** and share it anyway.
+
+    pub mod shared_channel {
+        use std::sync::{Arc, Mutex};
+        use std::sync::mpsc::{channel, Sender, Receiver};
+
+        /// A thread-safe wrapper around a `Receiver`.
+        #[derive(Clone)]
+        pub struct SharedReceiver<T>(Arc<Mutex<Receiver<T>>>);
+
+        impl<T> Iterator for SharedReceiver<T> {
+            type Item = T;
+
+            /// Get the next item from the wrapped receiver.
+            fn next(&mutself) -> Option<T> {
+                let guard = self.0.lock().unwrap();
+                guard.recv().ok()
+            }
+        }
+
+        /// Create a new channel whose receiver can be shared across threads
+        /// This returns a sender and a receiver, just like the stdlib's
+        /// `channel()`, and sometimes works as a drop-in replacement.
+        pub fn shared_channel<T>() -> (Sender<T>, SharedReceiver<T>) {
+            let (sender, receiver) = channel();
+            (sender, SharedReceiver(Arc::new(Mutex::new(receiver))))
+        }
+    }
+
+
+
+### Read/Write Locks (RwLock<T>)
+
+Whereas a mutex has a single **lock** method, a read/write lock has two locking methods, **read** and **write**. The **RwLock::write** method is like **Mutex::lock**. It waits for exclusive, **mut** access to the protected data. The **RwLock::read** method provides non-**mut** access, with the advantage that it is less likely to have to wait, because many threads can safely read at once. With a mutex, at any given moment, the protected data has only one reader or writer (or none). With a read/write lock, it can have either one writer or many readers, much like Rust references generally.
+Rust, of course, is uniquely well suited to enforce the safety rules on **RwLock** data. The single-writer-or_multiple-reader concept is the core of Rust's borrow system.
+
+### Condition Variables (Condvar)
+
+Often a thread needs to wait until a certain condition becomes true:
+
+* During server shutdown, the main thread may need to wait until all other threads are finished exiting.
+* When a worker thread has nothing to do, it needs to wait until there is some data to process.
+* A thread implementing a distributed consensus protocol may need to wait until a quorum of peers have responded.
+
+### Atomics
+
+The **std::sync::atomic** module contains atomic types for lock-free concurrent programming. These types are basically the same as Standard C++ atomics, with some extras:
+
+* **AtomicIsize** and **AtomicUsize** are shared integer types corresponding to the single-threaded **isize** and **usize** types.
+* **AtomicI8**, **AtomicI16**, **AtomicI32**, **AtomicI64**, and their unsigned variants like **AtomicU8** are shared integer types that correspond to the single-threaded types i8, i16, etc.
+* An **AtomicBool** is a shared bool value.
+* An **AtomicPtr<T>** is a shared value of the unsafe pointer type *mut T.
+
+Of course, there are other ways to implement this. The **AtomicBool** here could be replaced with a **Mutex<bool>** or a channel. The main difference is that atomics have minimal overhead. Atomic operations never use system calls. A load or store often compiles to a single CPU instruction.
+
+
+
+### Global Variables
 
 ## What Hacking Concurrent Code in Rust Is Like
+
