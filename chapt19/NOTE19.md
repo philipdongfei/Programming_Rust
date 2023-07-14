@@ -323,5 +323,12 @@ Of course, there are other ways to implement this. The **AtomicBool** here could
 
 ### Global Variables
 
+Atomic globals are limited to simple integers and Booleans. Still, creating a global variable of any other type amounts to solving two problems.
+First, the variable must be made thread-safe somehow, because otherwise it can't be global: for safety, static Variables must be both **Sync** and non-**mut**. Fortunately, we've already seen the solution for this problem. Rust has types for safely sharing values that change: **Mutex**, **RwLock**, and the atomic types. These types can be modified even when declared as non-**mut**.
+Second, static initializers can only call functions specifically marked as **const**, which the compiler can evaluate during compile time. Put another way, their output is deterministic; it depends only on their arguments, not any other state or I/O. That way, compiler can embed the results of that computation as a compile-time constant.
+You can also define your own **const** functions by simply prefixing the function's signature with **const**. Rust limits what **const** functions can do to a small set of operations, which are enough to be useful while still not allowing any nondeterministic results. **const** functions can't take types as generic arguments, only lifetimes, and it's not possible to allocate memory or operate on raw pointers, even in **unsafe** blocks. We can, however, use arithmetic operations (including
+wrapping and saturating arithmetic), logical operations that don't short-circuit, and other **const** functions.
+
+
 ## What Hacking Concurrent Code in Rust Is Like
 
