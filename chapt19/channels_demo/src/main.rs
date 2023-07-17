@@ -21,16 +21,16 @@ mod tmp;
 
 use std::fs::File;
 use std::io;
+use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver};
 use std::thread::{spawn, JoinHandle};
-use argparse::{ArgumentParse, StoreTrue, Collect};
+use argparse::{ArgumentParser, StoreTrue, Collect};
 
 use crate::index::InMemoryIndex;
 use crate::write::write_index_to_tmp_file;
 use crate::merge::FileMerge;
 use crate::tmp::TmpDir;
-
 
 /// Create an inverted index for the given list of `documents`,
 /// storing it in the specified `output_dir`.
@@ -74,7 +74,6 @@ fn run_single_threaded(documents: Vec<PathBuf>, output_dir: PathBuf)
         merge.add_file(file)?;
     }
     merge.finish()
-
 }
 
 /// Start a thread that loads documents from the filesystem into memory.
@@ -114,7 +113,7 @@ fn start_file_reader_thread(documents: Vec<PathBuf>)
 /// receiver, the sequence of in-memory indexes; and a `JoinHandle` that can be
 /// used to wait for this thread to exit. This stage of the pipeline is
 /// infallible (it performs no I/O, so there are no possible errors).
-fn start_file_indexing_thread(texts: REceiver<String>)
+fn start_file_indexing_thread(texts: Receiver<String>)
     -> (Receiver<InMemoryIndex>, JoinHandle<()>)
 {
     let (sender, receiver) = channel();
@@ -177,7 +176,7 @@ fn start_in_memory_merge_thread(file_indexes: Receiver<InMemoryIndex>)
 /// `JoinHandle` that can be used to wait for this thread to exit and receive
 /// any I/O errors it encountered.
 fn start_index_writer_thread(big_indexes: Receiver<InMemoryIndex>,
-                            output_dir: &Path)
+                             output_dir: &Path)
     -> (Receiver<PathBuf>, JoinHandle<io::Result<()>>)
 {
     let (sender, receiver) = channel();
@@ -192,6 +191,7 @@ fn start_index_writer_thread(big_indexes: Receiver<InMemoryIndex>,
         }
         Ok(())
     });
+
     (receiver, handle)
 }
 
@@ -213,15 +213,15 @@ fn merge_index_files(files: Receiver<PathBuf>, output_dir: &Path)
 /// On success this does exactly the same thing as `run_single_threaded`, but
 /// faster since it uses multiple CPUs and keeps them busy while I/O is
 /// happening.
-fn run_pipeline(documents: Vec<PathBuf>, Output_dir: PathBuf)
+fn run_pipeline(documents: Vec<PathBuf>, output_dir: PathBuf)
     -> io::Result<()>
 {
     // Launch all five stages of the pipeline.
-    let (texts, h1) = start_file_reader_thread(documents);
-    let (pints, h2) = start_file_indexing_thread(texts);
+    let (texts,   h1) = start_file_reader_thread(documents);
+    let (pints,   h2) = start_file_indexing_thread(texts);
     let (gallons, h3) = start_in_memory_merge_thread(pints);
-    let (files, h4) = start_index_writer_thread(gallons, &output_dir);
-    let result = merge_index_files(file, &output_dir);
+    let (files,   h4) = start_index_writer_thread(gallons, &output_dir);
+    let result = merge_index_files(files, &output_dir);
 
     // Wait for threads to finish, holding on to any errors that they encounter.
     let r1 = h1.join().unwrap();
@@ -297,5 +297,4 @@ fn main() {
         Err(err) => println!("error: {}", err)
     }
 }
-
 
