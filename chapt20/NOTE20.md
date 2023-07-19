@@ -80,10 +80,24 @@ We can call **cheapo_request** from an ordinary, synchronous function (like main
 Since **block_on** is a synchronous function that produces the final value of an asynchronous function, you can think of it as an adapter from the asynchronous world to the synchronous world. But its blocking character also means that you should never use **block_on** within an async function: it would block the entire thread until the value is ready. Use **await** instead.
 
 
-
 ### Spawning Async Tasks
 
+the goal of this chapter is to get the thread *doing other work* while it's waiting.
+For this, you can use **async_std::task::spawn_local**. This function takes a future and adds it to a pool that **block_on** will try polling whenever the future it's blocking on isn't ready.
+The **spawn_local** function is an asynchronous analogue of the standard library's **std::thread::spawn** function for starting threads:
+
+* **std::thread::spawn(c)** takes a closure **c** and starts a thread running it, returning a **std::thread::JoinHandle** whose **join** method waits for the thread to finish and returns whatever **c** returned.
+* **async_std::task::spawn_local(f)** takes the future **f** and adds it to the pool to be polled when the current thread calls **block_on.spawn_local** returns its own **async_std::task::JoinHandle** type, itself a future that you can await to retrieve **f'**s final value.
+
+We have finally achieved the goal we set out at the beginning of the chapter: letting a thread take on other work while it waits for I/O to complete so that the thread's resources aren't tied up doing nothing. Even better, this goal was met with code that looks very much like ordinary Rust code: some of the functions are marked **async**, some of the function calls are followed by **.await**, and we use functions from **async_std** instead fo **std**, but otherwise,
+it's ordinary Rust code.
+One important difference to keep in mind between asynchronous tasks and threads is that switching from one async task to another happens only at **await** expressions, when the future being awaited returns **Poll::Pending**. This means that if you put a long-running computation in **cheapo_request**, none of the other tasks you passed to **spawn_local** will get a chance to run until it's done. With threads, this problem doesn't arise: the operating system can suspend
+any thread at any point and sets timers to ensure that no thread monopolizes the processor.
+
 ### Async Blocks
+
+In addition to asynchronous functions, Rust also supports *asynchronous blocks*. Whereas an ordinary block statement returns the value of its last expression, an async block returns *a future of* the value its last expression. You can use **await** expressions within an async block.
+
 
 ### Building Async Functions from Async Blocks
 
