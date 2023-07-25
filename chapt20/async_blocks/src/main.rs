@@ -1,7 +1,8 @@
-use async_std::io::prelude::*;
+//use async_std::io::prelude::*;
 
 
-pub async fn test_async_blocks() -> Result<_, _> {
+//TODO: fix
+pub async fn test_async_blocks() -> std::io::Result<String> {
     let input = async_std::io::stdin();
     let future = async {
         let mut line = String::new();
@@ -13,10 +14,14 @@ pub async fn test_async_blocks() -> Result<_, _> {
 
         Ok::<(), std::io::Error>(())
     };
-    //Ok(future)
+    Ok(future)
 }
 fn main() {
     let result = async_std::task::block_on(test_async_blocks());
+    match result {
+        Ok(response) => println!("{}", response),
+        Err(err) => eprintln!("error: {}", err),
+    }
     /*
     match result {
         Ok(v) => println!("{v:?}"),

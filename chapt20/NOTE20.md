@@ -101,18 +101,85 @@ In addition to asynchronous functions, Rust also supports *asynchronous blocks*.
 
 ### Building Async Functions from Async Blocks
 
+Asynchronous blocks give us another way to get the same effect as an Asynchronous function, with a little more flexibility.
+
+
 ### Spawning Async Tasks on a Thread Pool
+
+Like **spawn_local**, **spawn** returns a **JoinHandle** value you can await to get the future's final value. But unlike **spawn_local**, the future doesn't have to wait for you to call **block_on** before it gets polled. As soon as one of the threads from the thread pool is free, it will try polling it.
+
 
 ### But Does Your Future Implement Send?
 
+A future is **Send** only if all the values it contains are **Send**: all the function arguments, local variables, and even anonymous temporary values must be safe to move to another thread.
+This error message is long, but it has a lot of helpful detail:
+* It explains why the future needs to be **Send: task::spawn** requires it.
+* It explains which value is not **Send**: the local variable **string**, whose type is **Rc<String>**.
+* It explains why **string** affects the future: it is in scope across the indicated **await**.
+
+There are two ways to fix this problem. One is to restrict the scope of the non-**Send** value so that it doesn't cover any **await** expressions and thus doesn't need to be saved in the function's future.
+Another solution is simply to use **std::sync::Arc** instead of **Rc**. **Arc** uses atomic updates to manage its reference counts, which makes it a bit slower, but **Arc** pointers are **Send**.
+
+
 ### Long Running Computations: yield_now and spawn_blocking
 
+One way to avoid this is simply to **await** something occasionally. The **async_std::task::yield_now** function returns a simple future designed for this:
+
+    while computation_not_done() {
+        ... do one medium-sized step of computation ...
+        async_std::task::yield_now().await;
+    }
+
+The first time the **yield_now** future is polled, it returns **Poll::Pending**, but says it's worth polling again soon. The effect is that your asynchronous call gives up the thread and other tasks get a chance to run, but your call with get another turn soon. The second time **yield_now**'s future is polled, it returns **Poll::Ready(())**, and your async function can resume execution.
+
+For cases like this, you can use **async_std::task::spawn_blocking**. This function takes a closure, starts it running on its own thread, and returns a future of its return value. Asynchronous code can await that future, yielding its thread to other tasks until the computation is ready.
 
 ### Comparing Asynchronous Designs
 
+Rust's use of polling, however, is unusual. In Rust, however, an async call does nothing until you pass it to a function like **block_on**, **spawn**, or **spawn_local** that will poll it and drive the work to tcompletion. These functions, call *executors*, play the role that other languages cover with a global event loop.
+Because Rust makes you, the programmer, choose an executor to poll your futures, Rust has no need for a global event loop build into the system.
+
+
 ### A Real Asynchronous HTTP Client
 
+
+
 ## An Asynchronous Client and Server
+
+This section's example is [a chat server and client](https://github.com/ProgrammingRust/async-chat)
+In particular, we want to handle *backpressure* well. By this we mean that if one client has a slow net connection or drops its connection entirely, that must never affect other clients' ability to exchange messages at their own pace. And since a slow client should not make the server spend unbounded memory holding on to its evergrowing backlog of messages, our server should drop messages for clients that can't keep up, but notify them that their stream is incomplete. (A real chat
+server would log messages to disk and let clients retrieve those they've missed, but we've left that out.)
+We're depending on four crates:
+* The **async-std** crate is the collection of asynchronous I/O primitives and utilities we've been using throughout the chapter.
+* The **tokio** crate is another collection of asynchronous primitives like **async-std**, one of the oldest and most mature. It's widely used and holds its design and implementation to high standards, but requires a bit more care to use than **async-std**.
+* The **serde** and **serde_json** crates we've seen before. These give us convenient and efficient tools for generating and parsing JSON, which our chat protocol uses to represent data on the network.
+
+We'll present the contents of each source file over the course of the chapter, but once they're all in place, if you type **cargo build** in this tree, that compiles the library crate and then builds both executables. Cargo automatically includes the library crate as a dependency, making it a convenient place to put definitions shared by the client and server. Similarly, **cargo check** checks the entire source tree. To run either of the executables, you can
+use commands like these:
+
+    $ cargo run --release --bin server -- localhost:8088
+    $ cargo run --release --bin client -- localhost:8088
+
+
+### Error and Result Types
+
+### The Protocol
+
+### Taking User Input: Asynchronous Streams
+
+### Sending Packets
+
+### Receiving Packets: More Asynchronous Streams
+
+### The Client's Main Function
+
+### The Server's Main Function
+
+### Handling Chat Connections: Async Mutexes
+
+### The Group Table: Synchronous Mutexes
+
+### Chat Groups: tokio's Broadcast Channels
 
 ## Primitive Futures and Executors: When Is a Future Worth Polling Again?
 
