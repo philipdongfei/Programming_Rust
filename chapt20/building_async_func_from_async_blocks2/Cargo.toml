@@ -1,9 +1,10 @@
 [package]
-name = "async_blocks"
+name = "building_async_func_from_async_blocks2"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# We need the 'unstable' feature to get 'spawn_local'.
 async-std = { version = "1.0", features = ["unstable"] }

@@ -32,7 +32,9 @@ async fn many_requests(requests: Vec<(String, u16, String)>)
 
     let mut handles = vec![];
     for (host, port, path) in requests {
-        handles.push(task::spawn_local(async move {
+        // use async_std::task::spawn to spawn a future onto a pool of worker threads 
+        // dedicated to polling futures that are ready to make progress. 
+        handles.push(task::spawn(async move {
             cheapo_request(&host, port, &path).await
         }));
     }

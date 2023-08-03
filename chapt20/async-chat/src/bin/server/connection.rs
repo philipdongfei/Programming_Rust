@@ -9,7 +9,7 @@ use async_std::sync::Arc;
 
 use crate::group_table::GroupTable;
 
-pub async fn server(socket: TcpStream, groups: Arc<GroupTable>)
+pub async fn serve(socket: TcpStream, groups: Arc<GroupTable>)
                 -> ChatResult<()>
 {
     let outbound = Arc::new(Outbound::new(socket.clone()));

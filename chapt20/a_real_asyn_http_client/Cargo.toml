@@ -1,9 +1,10 @@
 [package]
-name = "async_blocks"
+name = "a_real_asyn_http_client"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-std = { version = "1.0", features = ["unstable"] }
+async-std = "1.0"
+surf = "1.0"

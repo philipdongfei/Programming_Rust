@@ -1,0 +1,13 @@
+[package]
+name = "spawning_async_tasks_on_a_thread_pool"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# We need the 'unstable' feature to get 'spawn_local'.
+Here's a rewrite of **many_requests**, even simpler than the one based on **cheapo_request**, that uses **surf** to run a series of requests concurrently. You'll need these dependencies in your **Cargo.toml** file:
+
+    
+async-std = { version = "1.0", features = ["unstable"] }

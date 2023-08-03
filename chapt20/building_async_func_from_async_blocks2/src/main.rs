@@ -4,16 +4,16 @@ use std::io;
 use std::future::Future;
 
 //TODO: fix
-fn cheapo_request<'a>(host: &'a str, port: u16, path: &'a str)
-   -> impl Future<Output = io::Result<String>> + 'a
+fn cheapo_request(host: &str, port: u16, path: & str)
+   -> impl Future<Output = io::Result<String>> + 'static
 {
-    //let host = host.to_string();
-    //let path = path.to_string();
+    let host = host.to_string();
+    let path = path.to_string();
 
     async move {
         let mut socket = net::TcpStream::connect((&*host, port)).await?;
 
-        let request = format!("GET {} HTTP/1.1\r\nHost: {}\r\n\r\n", path, host);
+        let request = format!("GET {} HTTP/1.1\r\nHost: {}\r\n\r\n", path, &*host);
         socket.write_all(request.as_bytes()).await?;
         socket.shutdown(net::Shutdown::Write)?;
 
@@ -34,9 +34,9 @@ async fn many_requests(requests: Vec<(String, u16, String)>)
     let mut handles = vec![];
     // async blocks
     for (host, port, path) in requests {
-        handles.push(task::spawn_local(async move {
-            cheapo_request(&host, port, &path).await
-        }));
+        handles.push(task::spawn_local(
+            cheapo_request(&host, port, &path)
+        ));
     }
 
     let mut results = vec![];
