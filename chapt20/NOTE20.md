@@ -361,18 +361,81 @@ We're depending on four crates:
 * The **tokio** crate is another collection of asynchronous primitives like **async-std**, one of the oldest and most mature. It's widely used and holds its design and implementation to high standards, but requires a bit more care to use than **async-std**.
 * The **serde** and **serde_json** crates we've seen before. These give us convenient and efficient tools for generating and parsing JSON, which our chat protocol uses to represent data on the network.
 
+in addition to the main library crate, *src/lib.rs*, with its submodule *src/utils.rs*, it also includes two executables:
+
+* *src/bin/client.rs* is a single-file executable for the chat client.
+* *src/bin/server* is the server executable, spread across four files: *main.rs* holds the **main** function, and there are three submodules, *connection.rs*, *group.rs*, and *group_table.rs*.
+
 We'll present the contents of each source file over the course of the chapter, but once they're all in place, if you type **cargo build** in this tree, that compiles the library crate and then builds both executables. Cargo automatically includes the library crate as a dependency, making it a convenient place to put definitions shared by the client and server. Similarly, **cargo check** checks the entire source tree. To run either of the executables, you can
 use commands like these:
 
     $ cargo run --release --bin server -- localhost:8088
     $ cargo run --release --bin client -- localhost:8088
 
+The **--bin** option indicates which executable to run, and any arguments following the -- option get passed to the executable itself. Our client and server just want to know the server's address and TCP port.
 
 ### Error and Result Types
 
+    use std::error::Error;
+
+    pub type ChatError = Box<dyn Error + Send + Sync + 'static>;
+    pub type ChatResult<T> = Result<T, ChatError>;
+
+These are the general-purpose error types we suggested in "Working with Multiple Error Types" on page 166. The **async_std**, **serde_json**, and **tokio** crates each define their own error types, but the **?** operator can automatically convert them all into a **ChatError**, using the standard library's implementation of the **From** trait that can convert any suitable error type to **Box<dyn Error + Send + Sync + 'static>. The **Send** and **Sync** bounds ensure
+that if a task spawned onto another thread fails, it can safely report the error to the main thread.
+In a real application, consider using the **anyhow** crate, which provides **Error** and **Result** types similar to these. The **anyhow** crate is easy to use and provides some nice features beyond what our **ChatError** and **ChatResult** can offer.
+
+
 ### The Protocol
 
+    use serde::{Deserialize, Serialize};
+    use std::sync::Arc;
+    
+    pub mod utils;
+    
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    pub enum FromClient {
+        Join { group_name: Arc<String> },
+        Post {
+            group_name: Arc<String>,
+            message: Arc<String>,
+        },
+    }
+    
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    pub enum FromServer {
+        Message {
+            group_name: Arc<String>,
+            message: Arc<String>,
+        },
+        Error(String),
+    }
+    
+    #[test]
+    fn test_fromclient_json() {
+        use std::sync::Arc;
+    
+        let from_client = FromClient::Post {
+            group_name: Arc::new("Dogs".to_string()),
+            message: Arc::new("Samoyeds rock!".to_string()),
+        };
+    
+        let json = serde_json::to_string(&from_client).unwrap();
+        assert_eq!(json,
+                r#"{"Post":{"group_name":"Dogs","message":"Samoyeds rock!"}}"#);
+    
+        assert_eq!(serde_json::from_str::<FromClient>(&json).unwrap(),
+                from_client);
+    }
+
+
+The **FromClient** enum represents the packets a client can send to the server: it can ask to join a room and post messages to any room it has joined. **FromServer** represents what the server can send back: messages posted to some group, and error messages. Using a reference-counted **Arc<String>** instead of a plain **String** helps the server avoid making copies of strings as it manages groups and distributes messages.
+
+Note that the **Arc** pointers in **FromClient** have no effect on the serialized form: the reference-counted strings appear directly as JSON object member values.
+
 ### Taking User Input: Asynchronous Streams
+
+
 
 ### Sending Packets
 
