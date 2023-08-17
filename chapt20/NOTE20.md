@@ -435,15 +435,175 @@ Note that the **Arc** pointers in **FromClient** have no effect on the serialize
 
 ### Taking User Input: Asynchronous Streams
 
+The asynchronous **BufReader**'s lines method is interesting. It can't return an iterator, the way the standard library does: the **Iterator::next** method is an ordinary synchronous function, so calling **commands.next()** would block the thread until the next line was ready. Instead, **lines** returns a *stream* of **Result<String>** values. A stream is the asynchronous analogue of an iterator: it produces a sequence of values on demand, in an async-friendly fashion. Here's the
+definition of the **Stream** trait, from the **async_std::stream** module:
+
+    trait Stream {
+        type Item;
+    
+        // For now, read `Pin<&mut Self>` as `&mut Self`.
+        fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>)
+            -> Poll<Option<Self::Item>>;
+    }
+
+You can look at this as a hybrid of the **Iterator** and **Future** traits. Like an iterator, a **Stream** has an associated **Item** type and uses **Option** to indicate when the sequence has ended. But like a future, a stream must be polled: to get the next item (or learn that the stream has ended), you must call **poll_next** until it returns **Poll::Ready**. A stream's **poll_next** implementation should always return quickly, without blocking. And if a stream returns
+**Poll::Pending**, it must notify the caller when it's worth polling again via the **Context**.
+The **poll_next** method is awkward to use directly, but you won't generally need to do that. Like iterators, streams have a broad collection of utility methods like **filter** and **map**. Among these is a **next** method, which returns a future of the stream's next **Option<Self::Item>**. Rather than polling the stream explicitly, you can call **next** and await the future it returns instead.
+
+
+When working with streams, it's important to remember to use the **async_std** prelude:
+
+    use async_std::prelude::*;
+
+    pub trait StreamExt: Stream {
+        ... define utility methods as default methods ...
+    }
+
+    impl<T: Stream> StreamExt for T {}
+
+This is an example of the *extension trait* pattern we described in "Traits and Other People's Types". The **async_std::prelude** module brings the **StreamExt** methods into scope, so using the prelude ensures its methods are visible in your code.
 
 
 ### Sending Packets
 
+For transmitting packets on a network socket, our client and server use the **send_as_json** function from our library crate's **utils** module:
+
+    use async_std::prelude::*;
+    use serde::Serialize;
+    use std::marker::Unpin;
+
+    pub async fn send_as_json<S, P>(outbound: &mut S, packet: &P) -> ChatResult<()>
+    where
+        S: async_std::io::Write + Unpin,
+        P: Serialize,
+    {
+        let mut json = serde_json::to_string(&packet)?;
+        json.push('\n');
+        outbound.write_all(json.as_bytes()).await?;
+        Ok(())
+    }
+
+This function builds the JSON representation of packet as a String, adds a newline to the end, and then writes it all to outbound.
+
+As with streams, many of the methods of **async_std**'s I/O traits are actually defined on extension traits, so it's important to remember to use **async_std::prelude::*** whenever you are using them.
+
+
 ### Receiving Packets: More Asynchronous Streams
+
+    use serde::de::DeserializeOwned;
+
+    pub fn receive_as_json<S, P>(inbound: S) -> impl Stream<Item = ChatResult<P>>
+        where S: async_std::io::BufRead + Unpin,
+              P: DeserializeOwned,
+    {
+        inbound.lines()
+        .map(|line_result| -> ChatResult<P> {
+            let line = line_result?;
+            let parsed = serde_json::from_str::<P>(&line)?;
+            Ok(parsed)
+        })
+    }
+
+Like **send_as_json**, this function is generic in the input stream and packet types:
+
+* The stream type S must implement **async_std::io::BufRead**, the asynchronous analogue of **std::io::BufRead**, representing a buffered input byte stream.
+* The packet type P must implement **DeserializeOwned**, a stricter variant of **serde's Deserialize** trait. 
+
+Notice that **receive_as_json** is not, itself, an asynchronous function. It is an ordinary function that returns an async value, a stream.
+To see how **receive_as_json** gets used, here is our chat client's **handle_replies** function from *src/bin/client.rs*, which receives a stream of **FromServer** values from the network and prints them out for the user to see:
+
+    use async_chat::FromServer;
+
+    async fn handle_replies(from_server: net::TcpStream) -> ChatResult<()> {
+        let buffered = io::BufReader::new(from_server);
+        let mut reply_stream = utils::receive_as_json(buffered);
+
+        while let Some(reply) = reply_stream.next().await {
+            match reply? {
+                FromServer::Message { group_name, message } => {
+                    println!("message posted to {}: {}", group_name, message);
+                }
+                FromServer::Error(message) => {
+                    println!("error from server: {}", message);
+                }
+            }
+        }
+
+        Ok(())
+    }
 
 ### The Client's Main Function
 
+we can show the chat client's main function, from *src/bin/client.rs*:
+
+    use async_std::task;
+
+    fn main() -> ChatResult<()> {
+        let address = std::env::args().nth(1)
+            .expect("Usage: client ADDRESS:PORT");
+
+        task::block_on(async {
+            let socket = net::TcpStream::connect(address).await?;
+            socket.set_nodelay(true)?;
+
+            let to_server = send_comands(socket.clone());
+            let from_server = handle_replies(socket);
+
+            from_server.race(to_server).await?;
+
+            Ok(())
+        })
+    }
+
+Having obtained the server's address from the command line, **main** has a series of asynchronous functions it would like to call, so it wraps the remainder of the function in an asynchronous block and passes the block's future to **async_std::task::block_on** to run.
+
+
 ### The Server's Main Function
+
+Here are the entire contents of the main file for the server, *src/bin/server/main.rs*:
+
+
+    use async_std::prelude::*;
+    use async_chat::utils::ChatResult;
+    use std::sync::Arc;
+    
+    mod connection;
+    mod group;
+    mod group_table;
+    
+    use connection::serve;
+    
+    fn main() -> ChatResult<()> {
+        let address = std::env::args().nth(1).expect("Usage: server ADDRESS");
+    
+        let chat_group_table = Arc::new(group_table::GroupTable::new());
+    
+        async_std::task::block_on(async {
+            // This code was shown in the chapter introduction.
+            use async_std::{net, task};
+    
+            let listener = net::TcpListener::bind(address).await?;
+    
+            let mut new_connections = listener.incoming();
+            while let Some(socket_result) = new_connections.next().await {
+                let socket = socket_result?;
+                let groups = chat_group_table.clone();
+                task::spawn(async {
+                    log_error(serve(socket, groups).await);
+                });
+            }
+    
+            Ok(())
+        })
+    }
+    
+    fn log_error(result: ChatResult<()>) {
+        if let Err(error) = result {
+            eprintln!("Error: {}", error);
+        }
+    }
+
+The server's **main** function resembles the client's: it does a little bit of setup and then calls **block_on** to run an async block that does the real work. To handle incoming connections from clients, it creates a **TcpListener** socket, whose **incoming** method returns a stream of **std::io::Result<TcpStream>** values.
 
 ### Handling Chat Connections: Async Mutexes
 
