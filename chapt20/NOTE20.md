@@ -607,7 +607,121 @@ The server's **main** function resembles the client's: it does a little bit of s
 
 ### Handling Chat Connections: Async Mutexes
 
+Here's the server's workhorse: the **serve** function from the **connection** module in *src/bin/server/connection.rs*:
+
+    use async_chat::{FromClient, FromServer};
+    use async_chat::utils::{self, ChatResult};
+    use async_std::prelude::*;
+    use async_std::io::BufReader;
+    use async_std::net::TcpStream;
+    use async_std::sync::Arc;
+    
+    use crate::group_table::GroupTable;
+    
+    pub async fn serve(socket: TcpStream, groups: Arc<GroupTable>)
+                    -> ChatResult<()>
+    {
+        let outbound = Arc::new(Outbound::new(socket.clone()));
+    
+        let buffered = BufReader::new(socket);
+        let mut from_client = utils::receive_as_json(buffered);
+        while let Some(request_result) = from_client.next().await {
+            let request = request_result?;
+    
+            let result = match request {
+                FromClient::Join { group_name } => {
+                    let group = groups.get_or_create(group_name);
+                    group.join(outbound.clone());
+                    Ok(())
+                }
+    
+                FromClient::Post { group_name, message } => {
+                    match groups.get(&group_name) {
+                        Some(group) => {
+                            group.post(message);
+                            Ok(())
+                        }
+                        None => {
+                            Err(format!("Group '{}' does not exist", group_name))
+                        }
+                    }
+                }
+            };
+            if let Err(message) = result {
+                let report = FromServer::Error(message);
+                outbound.send(report).await?;
+            }
+        }
+    
+        Ok(())
+    }
+    
+This is almost a mirror image of the client's **handle_replies** function: the bulk of the code is a loop handling an incoming stream of **FromClient** values, built from a buffered TCP stream with **receive_as_json**. If an error occurs, we generate a **FromServer::Error** packet to convey the bad news back to the client.
+
+This is managed with the **Outbound** type, defined in *src/bin/server/connection.rs* as follows:
+
+    use async_std::sync::Mutex;
+    
+    pub struct Outbound(Mutex<TcpStream>);
+    
+    impl Outbound {
+        pub fn new(to_client: TcpStream) -> Outbound {
+            Outbound(Mutex::new(to_client))
+        }
+    
+        pub async fn send(&self, packet: FromServer) -> ChatResult<()> {
+            let mut guard = self.0.lock().await;
+            utils::send_as_json(&mut *guard, &packet).await?;
+            guard.flush().await?;
+            Ok(())
+        }
+    }
+
+When created, an **Outbound** value takes ownership of a **TcpStream** and wraps it in a Mutex to ensure that only one task can use it at a time. The **serve** function wraps each **Outbound** in an Arc reference-counted pointer so that all the groups the client joins can point to the same shared **Outbound** instance.
+
+Note that **Outbound** uses the **async_std::sync::Mutex** type, not the standard library's **Mutex**. There are three reasons for this.
+
+First, the standard library's **Mutex** may misbehave if a task is suspended while holding a mutex guard. If the thread that had been running that task picks up another task that tries to lock the same **Mutex**, trouble ensures: from the **Mutex**'s point of view, the thread that already owns it is trying to lock it again. The standard **Mutex** isn't designed to handle this case, so it panics or deadlocks. (It will never grant the lock inappropriately.) There is work
+underway to make Rust detect this problem at compile time and issue a warning whenever a **std::sync::Mutex** guard is live across an **await** expression. Since **Outbound::send** needs to hold the lock while it awaits the futures of send_as_json and guard.flush, it must use async_std's Mutex.
+
+ 
+
 ### The Group Table: Synchronous Mutexes
+
+Often there is no need to await anything while holding a mutex, and the lock is not held for long. In such cases, the standard library's Mutex can be much more efficient.
+
+    use crate::group::Group;
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+    
+    pub struct GroupTable(Mutex<HashMap<Arc<String>, Arc<Group>>>);
+    
+    impl GroupTable {
+        pub fn new() -> GroupTable {
+            GroupTable(Mutex::new(HashMap::new()))
+                
+        }
+    
+        pub fn get(&self, name: &String) -> Option<Arc<Group>> {
+            self.0.lock()
+                .unwrap()
+                .get(name)
+                .cloned()
+        }
+    
+        pub fn get_or_create(&self, name: Arc<String>) -> Arc<Group> {
+            self.0.lock()
+                .unwrap()
+                .entry(name.clone())
+                .or_insert_with(|| Arc::new(Group::new(name)))
+                .clone()
+        }
+    }
+
+A **GroupTable** is simple a mutex-protected hash table, mapping chat group names to actual groups, both managed using reference-counted pointers. The **get** and **get_or_create** methods lock the mutex, perform a few hash table operations, perhaps some allocations, and return.
+
+If our chat server found itself with millions of users, and the **GroupTable** mutex did become a bottleneck, making it asynchronous wouldn't address that problem. It would probably be better to use some sort of collection type specialized for concurrent access instead of **HashMap**. For example, the **dashmap** crate provides such a type.
+
 
 ### Chat Groups: tokio's Broadcast Channels
 
