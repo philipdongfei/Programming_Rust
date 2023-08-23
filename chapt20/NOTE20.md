@@ -725,6 +725,86 @@ If our chat server found itself with millions of users, and the **GroupTable** m
 
 ### Chat Groups: tokio's Broadcast Channels
 
+In our server, the **group::Group** type represents a chat group. This type only needs to support the two methods that **connection::serve** calls: **join**, to add a new member, and **post**, to post a message. Each message posted needs to be distributed to all the members.
+This is where we address the challenge mentioned earlier of *backpressure**. There are serveral needs in tension with each other:
+
+* If one member can't keep up with the messages being posted to the group--if they have a slow network connection, for example--other members in the group should not be affected.
+* Even if a member falls behind, there should be means for them to rejoin the conversation and continue to participate somehow.
+* Memory spent buffering messages should not grow without bound.
+
+Because these challenges are common when implementing many-to-many communication patterns, the **tokio** crate provides a *broadcast channel* type that implements one reasonable set of tradeoffs. A **tokio** broadcast channel is a queue of values (in our case, chat messages) that allows any number of different threads or tasks to send and receive values. It's called a "broadcast" channel because every consumer gets its own copy of each value sent. (The value type must
+implement **Clone**.)
+Normally, a broadcast channel retains a message in the queue until every consumer has gotten their copy. But if the length of the queue would exceed the channel's maximum capacity, specified when it is created, the oldest messages get dropped. Any consumers who couldn't keep up get an error the next time they try to get their next message, and the channel catches them up to the oldest message still available.
+
+Our chat server represents each chat group as a broadcast channel carrying **Arc<String>** values: posting a message to the group broadcasts it to all current members. 
+
+    use async_std::task;
+    use crate::connection::Outbound;
+    use std::sync::Arc;
+    use tokio::sync::broadcast;
+    
+    pub struct Group {
+        name: Arc<String>,
+        sender: broadcast::Sender<Arc<String>>
+    }
+    
+    impl Group {
+        pub fn new(name: Arc<String>) -> Group {
+            let (sender, _receiver) = broadcast::channel(1000);
+            Group { name, sender }
+        }
+    
+        pub fn join(&self, outbound: Arc<Outbound>) {
+            let receiver = self.sender.subscribe();
+    
+            task::spawn(handle_subscriber(self.name.clone(),
+                                            receiver,
+                                            outbound));
+        }
+    
+        pub fn post(&self, message: Arc<String>) {
+            // This only returns an error when there are no subscribers. A
+            // connection's outgoing side can exit, dropping its subscription,
+            // slightly before its incoming side, which may end up trying to send a
+            // message to an empty group.
+            let _ignored = self.sender.send(message);
+        }
+    }
+
+
+    
+    use async_chat::FromServer;
+    use tokio::sync::broadcast::error::RecvError;
+    
+    async fn handle_subscriber(group_name: Arc<String>,
+                            mut receiver: broadcast::Receiver<Arc<String>>,
+                            outbound: Arc<Outbound>)
+    {
+        loop {
+            let packet = match receiver.recv().await {
+                Ok(message) => FromServer::Message {
+                    group_name: group_name.clone(),
+                    message: message.clone(),
+                },
+    
+                Err(RecvError::Lagged(n)) => FromServer::Error(
+                    format!("Dropped {} messages from {}.", n, group_name)
+                ),
+    
+                Err(RecvError::Closed) => break,
+            };
+    
+            if outbound.send(packet).await.is_err() {
+                break;
+            }
+        }
+    }
+
+Although the details are different, the form of this function is familiar: it's a loop that receives messages from the broadcast channel and transmits them back to the client via the shared **Outbound** value. If the loop can't keep up with the broadcast channel, it receives a **Lagged** error, which it dutifully reports to the client.
+If sending a packet back to the client fails completely, perhaps because the connection has closed, **handle_subscriber** exits its loop and returns, causing the asynchronous task to exit. This drops the broadcast channel's **Receiver**, unsubscribing it from the channel. This way, when a connection is dropped, each of its group memberships is cleaned up the next time the group tries to send it a message.
+Our chat groups never close down, since we never remove a group from the group table, but just for completeness, **handle_subscriber** is ready to handle a **Closed** error by exiting the task.
+
+Note that we're creating a new asynchronous task for every group membership of every client. This is feasible because asynchronous tasks use so much less memory than threads and because switching from one asynchronous task to another within a process is quite efficient.
 
 
 ## Primitive Futures and Executors: When Is a Future Worth Polling Again?
