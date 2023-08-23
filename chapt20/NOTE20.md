@@ -725,9 +725,21 @@ If our chat server found itself with millions of users, and the **GroupTable** m
 
 ### Chat Groups: tokio's Broadcast Channels
 
+
+
 ## Primitive Futures and Executors: When Is a Future Worth Polling Again?
 
+### Invoking Wakers: spawn_blocking
+
+### Implementing block_on
+
 ## Pinning
+
+### The Two Life Stages of a Future
+
+### Pinned Pointers
+
+### The Unpin Trait
 
 ## When Is Asynchronous Code Helpful?
 
