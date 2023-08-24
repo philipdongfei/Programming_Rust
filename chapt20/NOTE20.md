@@ -809,7 +809,52 @@ Note that we're creating a new asynchronous task for every group membership of e
 
 ## Primitive Futures and Executors: When Is a Future Worth Polling Again?
 
+So a handwritten implementation of **Future** often looks something like this:
+
+    use std::task::Waker;
+
+    struct MyPrimitiveFuture {
+        ...
+        waker: Option<Waker>,
+    }
+
+    impl Future for MyPrimitiveFuture {
+        type Output = ...;
+
+        fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<...> {
+            ...
+
+            if ... future is ready ... {
+                return Poll::Ready(final_value);
+            }
+
+            // Save the waker for later.
+            self.waker = Some(cx.waker().clone());
+            Poll::Pending
+        }
+    }
+
+In other words, if the future's value is ready, return it. Otherwise, stash a clone of the Context's  waker somewhere, and return **Poll::Pending**.
+
+When the future is worth polling again, the future must notify the last executor that polled it by invoking its waker:
+
+    // If we have a waker, invoke it, and clear `self.waker`.
+    if let Some(waker) = self.waker.take() {
+        waker.wake();
+    }
+
+Ideally, the executor and the future take turns polling and waking: the executor polls the future and goes to sleep, then the future invokes the waker, so the executor wakes up and polls the future again.
+
+Futures of async functions and blocks don't deal with wakers themselves. They simply pass along the context they're given to the subfutures they await, delegating to them the obligation to save and invoke wakers. In our chat client, the first poll of the async block's future just passes the context along when it awaits **TcpStream::connect'**s future. Subsequent polls similarly pass their context through to whatever future the block awaits next.
+**TcpStream::connect'**s future handles being polled as shown in the preceding example: it hands the waker over to a helper thread that waits for the connection to be ready and then invokes it.
+
+**Waker** implements **Clone** and **Send**, so a future can always make its own copy of the waker and send it to other threads as needed. The **Waker::wake** method consumes the waker. There is also a **wake_by_ref** method that does not, but some executors can implement the consuming version a bit more efficiently.(The difference is at most a **clone**.)
+It's harmless for an executor to overpoll a future, just inefficient. Futures, however, should be careful to invoke a waker only when polling would make actual progress: a cycle of spurious waeups and polls can prevent an executor from ever sleeping at all, wasting power and leaving the processor less responsive to other tasks.
+
+
 ### Invoking Wakers: spawn_blocking
+
+
 
 ### Implementing block_on
 
