@@ -854,9 +854,128 @@ It's harmless for an executor to overpoll a future, just inefficient. Futures, h
 
 ### Invoking Wakers: spawn_blocking
 
+We described the **spawn_blocking** function, which starts a given closure running on another thread adn returns a future of its return value. we now have all the pieces we need to implement **spawn_blocking** ourselves. For simplicity, our version creates a fresh thread for each closure, rather than using a thread pool, as **async_std**'s version does.
+Although **spawn_blocking** returns a future, we're not going to write it as an **async fn**. Rather, it'll be an ordinary, synchronous function that returns a struct, **SpawnBlocking**, on which we'll implement **Future** ourselves.
+The signature of our **spawn_blocking** is as follows:
+    
+    pub fn spawn_blocking<T, F>(closure: F) -> SpawnBlocking<T>
+    where F: FnOnce() -> T,
+          F: Send + 'static,
+          T: Send + 'static,
+
+Since we need to send the closure to another thread and bring the return value back, both the closure **F** and its return value **T** must implement **Send**. And since we don't have any idea how long the thread will run, they must both be **'static** as well.
+**SpawnBlocking<T>** is a future of the closure's return value. Here is its definition:
+
+    use std::sync::{Arc, Mutex};
+    use std::task::Waker;
+
+    pub struct SpawnBlocking<T>(Arc<Mutex<Shared<T>>>);
+
+    struct Shared<T> {
+        value: Option<T>,
+        waker: Option<Waker>,
+    }
+
+The **Shared** struct must serve as a rendezvous between the future and the thread running the closure, so it it owned by an **Arc** and protected with a **Mutex**. (A synchronous mutex is fine here.) Polling the future checks whether **value** is present and saves the waker in **waker** if not. The thread that runs the closure saves its return value in **value** and then invokes **waker**, if present.
+Here's the full definition of **spawn_blocking**:
+
+    pub fn spawn_blocking<T, F>(closure: F) -> SpawnBlocking<T>
+    where F: FnOnce() -> T,
+          F: Send + 'static,
+          T: Send + 'static,
+    {
+        let inner = Arc::new(Mutex::new(Shared {
+            value: None,
+            waker: None,
+        }));
+
+        std::thread::spawn({
+            let inner = inner.clone();
+            move || {
+                let value = closure();
+                let maybe_waker = {
+                    let mut guard = inner.lock().unwrap();
+                    guard.value = Some(value);
+                    guard.waker.take()
+                };
+
+                if let Some(waker) = maybe_waker {
+                    waker.wake();
+                }
+            }
+        });
+
+        SpawnBlocking(inner)
+    }
+
+After creating the **Shared** value, this spawns a thread to run the closure, store the result in the **Shared's value** field, and invoke the waker, if any.
+We can implement **Future** for **SpawnBlocking** as follows:
+
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+
+    impl<T: Send> Future for SpawnBlocking<T> {
+        type Output = T;
+
+        fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<T> {
+            let mut guard = self.0.lock().unwrap();
+            if let Some(value) = guard.value.take() {
+                return Poll::Ready(value);
+            }
+
+            guard.waker = Some(cx.waker().clone());
+            Poll::Pending
+        }
+    }
+
+Polling a **SpawnBlocking** checks if the closure's value is ready, taking ownership and returning it if so. Otherwise, the future is still pending, so it saves a clone of the context's waker in the future's **waker** field.
+
 
 
 ### Implementing block_on
+
+We'll write our own version of **block_on**. It will be quite a bit simpler than **async_std**'s version;
+Here's the code:
+
+    use waker_fn::waker_fn;         // Cargo.toml: waker-fn = "1.1"
+    use futures_lite::pin;          // Cargo.toml: futures-lite = "1.11"
+    use crossbeam::sync::Parker;    // Cargo.toml: crossbeam = "0.8"
+    use std::future::Future;
+    use std::task::{Context, Poll};
+
+    fn block_on<F: Future>(future: F) -> F::Output {
+        let parker = Parker::new();
+        let unparker = parker.unparker().clone();
+        let waker = waker_fn(move || unparker.unpark());
+        let mut context = Context::from_waker(&waker);
+
+        pin!(future);
+
+        loop {
+            match future.as_mut().poll(&mut context) {
+                Poll::Ready(value) => return value,
+                Poll::Pending => parker.park(),
+            }
+        }
+    }
+
+This is pretty short, but there's a lot going on, so let's take it one piece at a time.
+
+    let parker = Parker::new();
+    let unparker = parker.unparker().clone();
+
+The **crossbeam** crate's **Parker** type is a simple blocking primitive: calling **parker.park()** blocks the thread until someone else calls **.unpark()** on the corresponding **Unparker**, which you obtain beforehand by calling **parker.unparker()**. If you unpark a thread that isn't parked yet, its next call to **park** returns immediately, without blocking. Our **block_on** will use the **Parker** to wait whenever the future isn't ready, and the waker we pass to futures will
+unpark it.
+
+    let waker = waker_fn(move || unparker.unpark());
+
+The **waker_fn** function, from the crate of the same name, creates a **Waker** from a given closure. Here, we make a **Waker** that, when invoked, calls the closure **move || unparker.unpark()**. You can create wakers using just the standard library, but **waker_fn** is a bit more convenient.
+
+    pin!(future);
+
+Given a variable holding a future of type **F**, the **pin!** macro takes ownership of the future and declares a new variable of the same name whose type is **Pin<&mut F>** and that borrows the future. This gives us the **Pin<&mut Self>** required by the **poll** method. For reasons we'll explain in the next section, futures of asynchronous functions and blocks must be referenced via a **Pin** before they can be polled.
+    
 
 ## Pinning
 
