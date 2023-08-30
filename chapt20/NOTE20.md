@@ -979,12 +979,51 @@ Given a variable holding a future of type **F**, the **pin!** macro takes owners
 
 ## Pinning
 
+Although asynchronous functions and blocks are essential for writing clear asynchronous code, handling their futures requires a bit of care. The **Pin** type helps Rust ensure they're used safely.
+
 ### The Two Life Stages of a Future
+
+In a synchronous function, all local variables live on the stack, but in an asynchronous function, local variables that are alive across an **await** must be located in the future, so they'll be available when it is polled again. Borrowing a reference to such a variable borrows a part of the future.
+Preventing borrowed values from being moved is generally the borrow checker's responsibility. Futures of async functions are a blind spot for the borrow checker, which Rust must cover somehow if it wants to keep its memory safety promises.
+Rust's solution to this problem rests on the insight that futures are always safe to move when they are first created, and only become unsafe to move when they are polled. A future that has just been created by calling an asynchronous function simply holds a resumption point and the argument values. These are only in scope for the asynchronous function's body, which has not yet begun execution. Only polling a future can borrow its contents.
+From this, we can see that every future has two life stages:
+
+* The first stage begins when the future is created. Because the function's body hasn't begun execution, no part of it could possibly be borrowed yet. At this point, it's as safe to move as any other Rust value.
+* The second stage begins the first time the future is polled. Once the function's body has begun execution, it could borrow references to variables stored in the future and then await, leaving that part of the future borrowed. Starting after its first poll, we must assume the future may not be safe to move.
+
+To enter its second life stage, the future must be polled. The **poll** method requires the future be passed as a **Pin<&mut Self>** value. **Pin** is a wrapper for pointer types (like &mut Self) that restricts how the pointers can be used, ensuring that their referents (like **Self**) cannot ever be moved again. So you must produce a **Pin-wrapped** pointer to the future before you can poll it.
+This, then, is Rust's strategy for keeping futures safe: a future can't become dangerous to move until it's polled; you can't poll a future until you've constructed a **Pin-wrapped** pointer to it; and once you've done that, the future can't be moved.
+
 
 ### Pinned Pointers
 
+The **Pin** type is a wrapper for pointers to futures that restricts how the pointers may be used to make sure that futures can't be moved once they've been polled. These restrictions can be lifted for futures that don't mind being moved, but they are essential to safely polling futures of asynchronous functions and blocks.
+by *pointer*, we mean any type that implements **Deref**, and possibly **DerefMut**. A **Pin** wrapped around a pointer is called a *pinned pointer*. **Pin<&mut T>** and **Pin<Box<T>>** are typical.
+The definition of **Pin** in the standard library is simple:
+
+    pub struct Pin<P> {
+        pointer: P,
+    }
+
+
 ### The Unpin Trait
 
+However, not all futures require this kind of careful handling. For any handwritten implementation of **Future** for an ordinary type, like our **SpawnBlocking** type mentioned earlier, the restrictions on constructing and using pinned pointers are unnecessary.
+Such durable types implement the **Unpin** marker trait:
+
+    trait Unpin { }
+
+Almost all types in Rust automatically implement **Unpin**, using special support in the compiler. Asynchronous function and block futures are the exceptions to this rule.
+For **Unpin** types, **Pin** imposes no restrictions whatsoever. You can make a pinned pointer from an ordinary pointer with **Pin::new** and get the pointer back out with **Pin::into_inner**. The **Pin** itself passes along the pointer's own **Deref** and **DerefMut** implementations.
+
+
 ## When Is Asynchronous Code Helpful?
+
+So, what are the real advantages of asynchronous code?
+
+* *Asynchronous tasks can use less memory*.
+* *Asynchronous tasks are faster to create*.
+* *Context switches are faster between asynchronous tasks than between operating system threads*.
+
 
 
