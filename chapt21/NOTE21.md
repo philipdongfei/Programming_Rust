@@ -23,14 +23,18 @@ The only difference is that semicolons are usually optional after curly braces. 
 
 ### Basics of Macro Expansion
 
+<<<<<<< HEAD
 Rust expands macros very early during compilation. The compiler reads your source code from beginning to end, defining and expanding macros as it goes. You can't call a macro before it is defined, because Rust expands each macro call before it even looks at the rest of the program.
 Macro patterns are a mini-language within Rust. They're essentially regular expressions for matching code. But where regular expressions operate on characters, patterns operate on *tokens*--the numbers , names, punctuation marks, and so forth that are the building blocks of Rust programs. This means you can use comments and whitespace freely in macro patterns to make them as readable as possible. Comments and whitespace aren't tokens, so they don't affect matching.
 Another important difference between regular expressions and macro patterns is that parentheses, brackets, and braces always occur in matched pairs in Rust. This is checked before macros are expanded, not only in macro patterns but throughout the language.
 Macro templates aren't much different from any of a dozen template languages commonly used in web programming. The only difference--and it's a significant one--is that the output is Rust code.
+=======
+>>>>>>> b72ec6b6f08d684db99e117b87e317d5d4bcbc9b
 
 
 ### Unintended Consequences
 
+<<<<<<< HEAD
 
 ### Repetition
 
@@ -60,6 +64,10 @@ Unlike the rest of Rust, patterns using **$( ... ),*** do not automatically supp
 We use **$( ... ),+ ,** to match a list with an extra comma. Then, in the template, we call **vec!** recursively, leaving the extra comma out. This time the second rule will match.
 
 
+=======
+### Repetition
+
+>>>>>>> b72ec6b6f08d684db99e117b87e317d5d4bcbc9b
 ## Built-In Macros
 
 ## Debugging Macros
