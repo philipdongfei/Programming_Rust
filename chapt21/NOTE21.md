@@ -214,4 +214,12 @@ Instead, the macro should use absolute paths to any names it uses. **macro_rules
 
 ## Avoiding Syntax Errors During Matching
 
+First, avoid confusable rules.
+The other way to avoid spurious syntax errors is by putting more specific rules first. 
+
 ## Beyond macro_rultes!
+
+[The Little Book of Rust Macros](https://danielkeep.github.io/tlborm/book/), by Daniel Keep et al., is an excellent handbook of advanced **macro_rules!** programming. 
+What makes a procedural macro "procedural" is that it's implemented as a Rust function, not a declarative rule set. This function interacts with the compiler through a thin layer of abstraction and can be arbitrarily complex.
+Because procedural macros interact with compiler internals, writing effective macros requires an understanding of how the compiler operates that is out of the scope of this book. It is, however, extensively covered in the [online documentation](https://oreil.ly/0xB2x).
+Perhaps, having read all this, you've decided that you hate macros. What then? An alternative is to generate Rust code using a build script. The [Cargo documentation](https://doc.rust-lang.org/cargo/reference/build-scripts.html) shows how to do it step by step.
