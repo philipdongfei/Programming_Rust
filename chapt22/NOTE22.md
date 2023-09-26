@@ -62,9 +62,39 @@ Unfortunately, it's not unusual to come across unsafe functions in the wild whos
 
 ## Unsafe Block or Unsafe Function?
 
-## Unsafe Block or Unsafe Function?
+You may find yourself wondering whether to use an **unsafe** block or just mark the whole function unsafe. The approach we recommend is to first make a decision about the function:
+
+- If it's possible to misuse the function in a way that compiles fine but still causes undefined behavior, you must mark it as unsafe. The rules for using the function correctly are its contract; the existence of a contract is what makes the function unsafe.
+- Otherwise, the function is safe: no well-typed call to it can cause undefined behavior. It should not be marked **unsafe**.
+
+Whether the functioin uses unsafe features in its body is irrelevant; what matters is the presence of a contract.
+Don't mark a safe function **unsafe** just because you use unsafe features in its body. Instead, use an **unsafe** block, even if it's the function's entire body.
 
 ## Undefined Behavior
+
+We usually say that two programs are equivalent if they will always have the same visible behavior when executed: they make the same system calls, interact with foreign libraries in equivalent ways, and so on. It's a bit like a Turing test for programs: if you can't tell wheter you're interacting with the original or the translation, then they're equivalent.
+
+It's basically impossible for Rust (or any other language) to assess whether a transformation to a program preserves its meaning unless it can trust the fundamental features of the language to behave as designed. And whether they do or not can depend not just on the code at hand, but on other, potentially distant, parts of the program. In order to do anything at all with your code, Rust assume that the rest of your program is well-behaved.
+Here,then, are Rust's rules for well-behaved programs:
+
+- The program must not read uninitialized memory.
+- The program must not create invalid primitive values:
+    - References,boxes, or **fn** pointers that are **null**
+    - **bool** values that are not either a 0 or 1
+    - **enum** values with invalid discriminant values
+    - **char** values that are not valid, nonsurrogate Unicode code points
+    - **str** values that are not well-formed UTF-8
+    - **Fat** pointers with invalid vtables/slice lengths
+    - Any value of the type **!**
+- The rules for references explained in Chapter 5 must be followed. No reference may outlive its referent; shared access is read-only access; and mutable access is exclusive access.
+- The program must not dereference null, incorrectly aligned, or dangling pointers.
+- The program must not use a pointer to access memory outside the allocation with which the pointer is associated.
+- The program must be free of data races. A data race occurs when two threads access the same memory location without synchronization, and at least one of the accesses is a write.
+- The program must not unwind across a call made from another language, via the foreign function interface, as explained in "Unwinding" on page 158.
+- The program must comply with the contracts of standard library functions.
+
+Any violation of these rules constitutes undefined behavior and renders Rust's efforts to optimize your program and translate it into machine language untrustworthy.
+Rust code that does not use unsafe features is guaranteed to follow all of the preceding rules, once it compiles (assuming the compiler has no bugs; we're getting there, but the curve will never intersect the asymptote). Only when you use unsafe features do these rules become your responsibility.
 
 ## Unsafe Traits
 
