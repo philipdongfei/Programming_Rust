@@ -98,11 +98,89 @@ Rust code that does not use unsafe features is guaranteed to follow all of the p
 
 ## Unsafe Traits
 
+An *unsafe trait* is a trait that has a contract Rust cannot check or enforce that implementers must satisfy to avoid undefined behavior. To implement an unsafe trait, you must mark the implementation as unsafe. It is up to you to understand the trait's contract and make sure your type satisfies it.
+A function that bounds its type variables with an unsafe trait is typically one that uses unsafe features itself, and satisfies their contracts only by depending on the unsafe trait's contract. An incorrect implementation of the trait could cause such a function to exhibit undefined behavior.
+Note that unsafe code must not depend on ordinary, safe traits being implemented correctly.
+
 ## Raw Pointers
+
+A *raw pointer* in Rust is an unconstrained pointer. But because raw pointers are so flexible, Rust cannot tell whether you are using them safely or not, so you can dereference them only in an **unsafe** block.
+Raw pointers are Essentially equivalent to C or C++ pointers, so they're also useful for interacting with code written in those languages.
+There are two kinds of raw pointers:
+
+- A \*mut **T** is a raw pointer to a **T** that permits modifying its referent.
+- A \*const **T** is a raw pointer to a **T** that only permits reading its referent.\(There is no plain \*T type; you must always specify either const or mut.\)
+
+Although Rust implicitly dereferences safe pointer types in various situations, raw pointer dereferences must be explicit:
+
+
+- The . operator will not implicitly dereference a raw pointer; you must write (*raw).field or (*raw).method(...).
+- Raw pointers do not implement **Deref**, so deref coercions do not apply to them.
+- Operators like == and &lt compare raw pointers as addresses: two raw pointers are equal if they point to the same location in memory. Similarly, hashing a raw pointer hashes the address it points to, not the value of its referent.
+- Formatting traits like **std::fmt::Display** follow references automatically, but don't handle raw pointers at all. The exceptions are **std::fmt::Debug** and **std::fmt::Pointer**, which show raw pointers as hexadecimal addresses, without dereferencing them.
+
+Unlike the + operator in C and C++, Rust's + does not handle raw pointers, but you can perform pointer arithmetic via their **offset** and **wrapping_offset** methods, or the more convenient **add**, **sub**, **wrapping_add**, and **wrapping_sub** methods.
+Note that **as** will not convert raw pointers to references. Such conversions would be unsafe, and **as** should remain a safe operation. Instead, you must dereference the raw pointer (in an **unsafe** block) and then borrow the resulting value.
+Be very careful when you do this: a reference produced this way has an unconstrained lifetime: there's no limit on how long it can live, since the raw pointer gives Rust nothing to base such a decision on.
+
+
 
 ### Dereferencing Raw Pointers Safely
 
+Here are some common-sense guidelines for using raw pointers safely:
+
+- Dereferencing null pointers or dangling pointers is undefined behavior, as is referring to uninitialized memory or values that have gone out of scope.
+- Dereferencing pointers that are not properly aligned for their referent type is undefined behavior.
+- You may borrow values out of a dereferenced raw pointer only if doing so obeys the rules for reference safety explained in Chapter 5: no reference may outlive its referent, shared access is read-only access, and mutable access is exclusive access.\(This rule is easy to violate by accident, since raw pointers are often used to create data structures with nonstandard sharing or ownership.\)
+- You may use a raw pointer's referent only if it is a well-formed value of its type.
+- You may use the **offset** and **wrapping_offset** methods on raw pointers only to point to bytes within the variable or heap-allocated block of memory that the original pointer referred to, or to the first byte beyond such a region.
+- If you assign to a raw pointer's referent, you must not violate the invariants of any type of which the referent is a part.
+
+
+
+
 ### Example: RefWithFlag
+
+
+    mod ref_with_flag {
+        use std::marker::PhantomData;
+        use std::mem::align_of;
+    
+        /// A `&T` and a `bool`, wrapped up in a single word.
+        /// The type `T` must require at least two-byte alignment.
+        ///
+        /// If you're the kind of programmer who's never met a pointer whose
+        /// 2^n bit you didn't want to steal, well, now you can do it safely!
+        /// ("But it's not nearly as exciting this way...")
+        pub struct RefWithFlag<'a, T> {
+            ptr_and_bit: usize,
+            behaves_like: PhantomData<&'a T> // occupies no space
+        }
+    
+        impl<'a, T: 'a> RefWithFlag<'a, T> {
+            pub fn new(ptr: &'a T, flag: bool) -> RefWithFlag<T> {
+                assert!(align_of::<T>() % 2 == 0);
+                RefWithFlag {
+                    ptr_and_bit: ptr as *const T as usize | flag as usize,
+                    behaves_like: PhantomData
+                }
+            }
+    
+            pub fn get_ref(&self) -> &'a T {
+                unsafe {
+                    let ptr = (self.ptr_and_bit & !1) as *const T;
+                    &*ptr
+                }
+            }
+    
+            pub fn get_flag(&self) -> bool {
+                self.ptr_and_bit & 1 != 0
+            }
+        }
+    }
+
+This code takes advantage of the fact that many types must be placed at even addresses in memory: since an even address's least significant bit is always zero, we can store something else there and then reliably reconstruct the original address just by masking off the bottom bit.
+
 
 ### Nullable Pointers
 
