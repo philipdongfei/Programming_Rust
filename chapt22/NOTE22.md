@@ -181,12 +181,33 @@ Here are some common-sense guidelines for using raw pointers safely:
 
 This code takes advantage of the fact that many types must be placed at even addresses in memory: since an even address's least significant bit is always zero, we can store something else there and then reliably reconstruct the original address just by masking off the bottom bit.
 
+The constructor **RefWithFlag::new** takes a reference and a **bool** value, asserts that the reference's type is suitable, and then converts the reference to a raw pointer and then a **usize**. The **usize** type is defined to be large enough to hold a pointer on whatever processor we're compiliing for, so converting a raw pointer to a **usize** and back is well-defined. Once we have a **usize**, we know it must be even, so we can use the | bitwise-or operator to combine it with
+the **bool**, which we've converted to an integer 0 or 1.
 
 ### Nullable Pointers
 
+A null raw pointer in Rust is a zero address, just as in C and C++. For any type T, the **std::ptr::null<T>** function returns a **\*const T** null pointer, and **std::ptr::null_mut<T>** return a **\*mut T** null pointer.
+
+
 ### Type Sizes and Alignments
 
+A value of any **Sized** type occupies a constant number of bytes in memory and must be placed at an address that is a multiple of some *alignment* value, determined by the machine architecture.
+Any type's alignment is always a power of two.
+A type's size is always rounded up to a multiple of its alignment, even if it technically could fit in less space.
+For unsized types, the size and alignment depend on the value at hand.
+
 ### Pointer Arithmetic
+
+Rust lays out the elements of an array, slice, or vector as a single contiguous block of memory. Elements are regularly spaced, so that if each element occupies **size** bytes, then the ith element starts with the **i \* size**th byte.
+One nice consequence of this is that if you have two raw pointers to elements of an array, comparing the pointers gives the same results as comparing the elements' indices: if i \< j, then a raw pointer to the ith element is less than a raw pointer to the jth element. This makes raw pointers useful as bounds on array traversals. In fact, the standard library's simple iterator over a slice was originally defined like this:
+
+    struct Iter<'a, T> {
+        ptr: *const T,
+        end: *const T,
+        ...
+    }
+
+The **ptr** field points to the next element iteration should produce, and the **end** field serves as the limit: when **ptr == end**, the iteration is complete.
 
 ### Moving into and out of Memory
 
