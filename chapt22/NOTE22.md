@@ -208,10 +208,19 @@ One nice consequence of this is that if you have two raw pointers to elements of
     }
 
 The **ptr** field points to the next element iteration should produce, and the **end** field serves as the limit: when **ptr == end**, the iteration is complete.
+Another nice consequence of array layout: if **element_ptr** is a \*const T or \*mut T raw pointer to the ith element of some array, then **element_ptr.offset(o)** is a raw pointer to the **\(i \+ o\)**th element.
+
 
 ### Moving into and out of Memory
 
+The true definition of an initialized value is one that is *treated as live*. Writing to a value's bytes is usually a necessary part of initialization, but only because doing so prepares the value to be treated as live. A move and a copy both have the same effect on memory; the difference between the two is that, after a move, the source is no longer treated as live, whereas after a copy, both the source and the destination are live.
+
+
 ### Example: GapBuffer
+
+The Emacs text editor uses a simple data structure called a *gap buffer* that can insert and delete characters in constant time. Whereas a **String** keeps all its spare capacity at the end of the text, which makes **push** and **pop** cheap, a gap buffer keeps its spare capacity in the midst of the text, at the point where editing is taking place. This spare capacity is called the *gap*. Inserting or deleting elements at the gap is cheap: you simply shrink or enlarge the gap
+as needed.
+
 
 ### Panic Safety in Unsafe Code
 
