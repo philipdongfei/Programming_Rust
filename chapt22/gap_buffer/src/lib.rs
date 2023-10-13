@@ -88,6 +88,8 @@ impl<T> GapBuffer<T> {
                 // `pos` falls after the gap. Move the gap right
                 // by shifting elements after the gap to before it.
                 let distance = pos - gap.start;
+                // pub const unsafe fn copy<T>(src: *const T, dst: *mut T, 
+                // count: usize)
                 std::ptr::copy(self.space(gap.end),
                                self.space_mut(gap.start),
                                distance);
@@ -95,6 +97,8 @@ impl<T> GapBuffer<T> {
                 // `pos` falls before the gap. Move the gap left
                 // by shifting elements before the gap to after it.
                 let distance = gap.start - pos;
+                // pub const unsafe fn copy<T>(src: *const T, dst: *mut T, 
+                // count: usize)
                 std::ptr::copy(self.space(pos),
                                self.space_mut(gap.end - distance),
                                distance);
@@ -107,6 +111,9 @@ impl<T> GapBuffer<T> {
     /// Insert `elt` at the current insertion position,
     /// and leave the insertion position after it.
     pub fn insert(&mut self, elt: T) {
+        // if the gap has been filled in,
+        // the enlarge_gap method double the capacity of
+        // `self.storage`
         if self.gap.len() == 0 {
             self.enlarge_gap();
         }
@@ -116,6 +123,8 @@ impl<T> GapBuffer<T> {
             std::ptr::write(self.space_mut(index), elt);
         }
         self.gap.start += 1;
+        println!("after insert , self.gap.start:{:?}, self.gap.end:{:?}", 
+            self.gap.start, self.gap.end);
     }
 
     /// Insert the elements produced by `iter` at the current insertion
@@ -137,9 +146,11 @@ impl<T> GapBuffer<T> {
         }
 
         let element = unsafe {
+            // whereas removal moves one value out 
             std::ptr::read(self.space(self.gap.end))
                 
         };
+        // and enlarges the gap to cover the space it used to occupy
         self.gap.end += 1;
         Some(element)
     }
@@ -245,10 +256,13 @@ impl<T> Drop for GapBuffer<T> {
 #[test]
 fn test_gapbuffer() {
     let mut buf = GapBuffer::new();
+    println!("after GapBuffer::new, buf.gap.start:{:?}, buf.gap.end:{:?}", buf.gap.start, buf.gap.end);
     buf.insert_iter("Lord of the Rings".chars());
+    println!("after insert_iter, buf.gap.start:{:?}, buf.gap.end:{:?}", buf.gap.start, buf.gap.end);
     buf.set_position(12);
-
+    println!("after set_position(12), buf.gap.start:{:?}, buf.gap.end:{:?}", buf.gap.start, buf.gap.end);
     buf.insert_iter("Onion ".chars());
+    println!("after insert_iter, buf.gap.start:{:?}, buf.gap.end:{:?}", buf.gap.start, buf.gap.end);
     assert_eq!(buf.get_string(), "Lord of the Onion Rings");
 }
 

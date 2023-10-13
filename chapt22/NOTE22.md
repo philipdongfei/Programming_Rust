@@ -219,13 +219,83 @@ The true definition of an initialized value is one that is *treated as live*. Wr
 ### Example: GapBuffer
 
 The Emacs text editor uses a simple data structure called a *gap buffer* that can insert and delete characters in constant time. Whereas a **String** keeps all its spare capacity at the end of the text, which makes **push** and **pop** cheap, a gap buffer keeps its spare capacity in the midst of the text, at the point where editing is taking place. This spare capacity is called the *gap*. Inserting or deleting elements at the gap is cheap: you simply shrink or enlarge the gap
-as needed.
+as needed. You can move the gap to any location you like by shifting text from one side of the gap to the other. When the gap is empty, you migrate to a larger buffer.
+While insertion and deletion in a gap buffer are fast, changing the position at which they take place entails moving the gap to the new position. Shifting the elements requires time proportional to the distance being moved. Fortunately, typical editing activeity involves making a bunch of changes in one neighborhood of the buffer before going off and fiddling with text someplace else.
+    
+    use std;
+    use std::ops::Range;
+    /* 
+    /// Struct std::ops::Range
+    pub struct Range<Inx> {
+        pub start: Idx,
+        pub end:   Idx,
+    }
+    */
 
+
+
+    pub struct GapBuffer<T> {
+        // Storage for elements. This has the capacity we need, but its length
+        // always remains zero. GapBuffer puts its elements and the gap in this
+        // `Vec`'s "unused" capacity.
+        storage: Vec<T>,
+    
+        // Range of uninitialized elements in the middle of `storage`.
+        // Elements before and after this range are always initialized.
+        gap: Range<usize>
+    }
+
+**GapBuffer** uses its **storage** field in a strange way. It never actually stores any elements in the vector--or not quite. It simply calls **Vec::with_capacity(n)** to get a block of memory large enough to hold **n** values, obtains raw pointers to that memory via the vector's **as_ptr** and **as_mut_ptr** methods, and then uses the buffer directly for its own purposes. The vector's length always remains zero. When the **Vec** gets dropped, the **Vec** doesn't try to
+free its elements, because it doesn't know it has any, but it does free the block of memory. This is what **GapBuffer** wants; it has own **Drop** implementation that knows where the live elements are and drops them correctly.
+
+Like the other types we've shown in this chapter, **GapBuffer** ensures that its own invariants are sufficient to ensure that the contract of every unsafe feature it uses is followed, so none of its public methods needs to be marked unsafe. **GapBuffer** implements a safe interface for a feature that cannot be written efficiently in safe code.
 
 ### Panic Safety in Unsafe Code
 
+It's all but unavoidable for a type's methods to momentarily relax the type's invariants while they do their job and then put everything back to rights before they return. A panic mid-method could cut that cleanup process short, leaving the type in an inconsistent state.
+If the type uses only safe code, then this inconsistency may make the type misbehave, but it can't introduce undefined behavior. But code using unsafe features is usually counting on its invariants to meet the contracts of those features. Broken invariants lead to broken contracts, which lead to undefined behavior.
+When working with unsafe features, you must take special care to identify these sensitive regions of code where invariants are temporarily relaxed, and ensure that they do nothing that might panic.
+
 ## Reinterpreting Memory with Unions
 
+Unions are one of Rust's most powerful features for manipulating those bytes and choosing how they are interpreted.
+A union representing a collection of bytes that can be interpreted as either an integer or a floating-point number would be written as follows:
+
+    union FloatOrInt {
+        f: f32,
+        i: i32,
+    }
+
+This is a union with two fields, **f** and **i**. They can be assigned to just like the fields of a struct, but when constructing a union, unlike a struct, you much choose exactly one. Where the fields of a struct refer to different positions in memory, the fields of a union refer to different interpretations of the same sequence of bits. Assigning to a different field simply means overwriting some or all of those bits, in accordance with an appropriate type.
+For the same reason, the size of a union is determined by its largest field.
+
+
+## Matching Unions
+
+Matching on a Rust union is like matching on a struct, except that each pattern has to specify exactly one field:
+
+    unsafe {
+        match u {
+            SmallOrLarge { s: true } => { println!("boolean true"); }
+            SmallOrLarge { l: 2 } => { println!("integer 2"); }
+            _ => { println!("something else"); }
+        }    
+    }
+
+A **match** arm that matches against a union variant without specifying a value will always succeed. The following code will cause undefined behavior if the last written field of u was u.i:
+
+    // Undefined behavior!
+    unsafe {
+        match float {
+            FloatOrInt { f } => { println!("float {}", f) },
+            // warning: unreachable pattern
+            FloatOrInt { i } => { println!("int {}", i) }
+
+        }
+    }
+
 ## Borrowing Unions
+
+Borrowing one field of a union borrows the entire union. This means that, following the normal borrowing rules, borrowing one field as mutable precludes any additional borrows on it or other fields, and borrowing one field as immutable means there can be no mutable borrows on any fields.
 
 
