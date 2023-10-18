@@ -94,6 +94,10 @@ construct raw pointers from arbitrary integers, and dereferencing such a pointer
 
 ## Using Functions from Libraries
 
+To use functions provided by a particular library, you can place a **\#\[link\]** attribute atop the **extern** block that names the library Rust should link the executable with.
+this example: git-toy
+
+
 ## A Raw Interface to libgit2
 
 ## A Safe Interface to libgit2
