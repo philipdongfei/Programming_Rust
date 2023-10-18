@@ -97,6 +97,42 @@ construct raw pointers from arbitrary integers, and dereferencing such a pointer
 To use functions provided by a particular library, you can place a **\#\[link\]** attribute atop the **extern** block that names the library Rust should link the executable with.
 this example: git-toy
 
+    use std::os::raw::c_int;
+
+    #[link(name = "git2")]
+    extern {
+        pub fn git_libgit2_init() -> c_int;
+        pub fn git_libgit2_shutdown() -> c_int;
+    }
+
+    fn main() {
+        unsafe {
+            git_libgit2_init();
+            git_libgit2_shutdown();
+        }
+    }
+
+    $ cd /home/jimb/libgit2
+    $ mkdir build
+    $ cd build
+    $ cmake ..
+    $ cmake --build .
+
+    $ cd /home/jimb
+    $ cargo new --bin git-toy
+    $ cd git-toy
+    $ cargo run
+
+    // To create your build script, add file named build.rs 
+    // in the same directory as the Cargo.toml file, 
+    // with the following contents:
+    fn main() {
+        println!(r"cargo:rustc-link-search=native=/home/jimb/libgit2/build");
+    }
+
+    $ export LD_LIBRARY_PATH=/home/jimb/libgit2/build:$LD_LIBRARY_PATH
+    $ cargo run
+
 
 ## A Raw Interface to libgit2
 
