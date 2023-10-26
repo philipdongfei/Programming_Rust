@@ -136,8 +136,189 @@ this example: git-toy
 
 ## A Raw Interface to libgit2
 
+The program we'll write is very simple: it takes a path as a command-line argument, opens the Git repository there, and prints out the head commit. But this is enough to illustrate the key strategies for building safe and idiomatic Rust interfaces.
+For the raw interface, the program will end up needing a somewhat larger collection of functions and types from **libgit2** than we used before, so it makes sense to move the **extern** block into its own module. We'll create a file named *raw.rs* in *git\-toy\/src* whose contents are as follows:
+
+
+    #![allow(non_camel_case_types)]
+    
+    use std::os::raw::{c_int, c_char, c_uchar};
+    
+    #[link(name = "git2")]
+    extern {
+        pub fn git_libgit2_init() -> c_int;
+        pub fn git_libgit2_shutdown() -> c_int;
+        // libgit2(v1.7) giterr_last(book) -> git_error_last
+        pub fn git_error_last() -> *const git_error;
+    
+        pub fn git_repository_open(out: *mut *mut git_repository,
+                                    path: *const c_char) -> c_int;
+        pub fn git_repository_free(repo: *mut git_repository);
+    
+        pub fn git_reference_name_to_id(out: *mut git_oid,
+                                    repo: *mut git_repository,
+                                    reference: *const c_char) -> c_int;
+    
+        pub fn git_commit_lookup(out: *mut *mut git_commit,
+                                    repo: *mut git_repository,
+                                    id: *const git_oid) -> c_int;
+    
+        pub fn git_commit_author(commit: *const git_commit) -> *const git_signature;
+        pub fn git_commit_message(commit: *const git_commit) -> *const c_char;
+        pub fn git_commit_free(commit: *mut git_commit);
+    }
+    
+    #[repr(C)] pub struct git_repository { _private: [u8; 0] }
+    #[repr(C)] pub struct git_commit { _private: [u8; 0] }
+    
+    #[repr(C)]
+    pub struct git_error {
+        pub message: *const c_char,
+        pub klass: c_int
+    }
+    
+    pub const GIT_OID_RAWSZ: usize = 20;
+    
+    #[repr(C)]
+    pub struct git_oid {
+        pub id: [c_uchar; GIT_OID_RAWSZ]
+    }
+    
+    pub type git_time_t = i64;
+    
+    #[repr(C)]
+    pub struct git_time {
+        pub time: git_time_t,
+        pub offset: c_int
+    }
+    
+    #[repr(C)]
+    pub struct git_signature {
+        pub name: *const c_char,
+        pub email: *const c_char,
+        pub when: git_time
+    }
+
+    
+Writing large **extern** blocks by hand can be a chore. If you are creating a Rust interface to a complex C library, you may want to try using the **bindgen** crate, which has functions you can use from your build script to parse C header files and generate the corresponding Rust declarations automatically. We don't have space to show **bindgen** in action here, but [bindgen's page on crates.io](https://crates.io/crates/bindgen) includes links to its documentation.
+Next we'll rewrite *main.rs* completely. First, we need to declare the **raw** module: 
+
+    mod raw;
+
+According to **libgit2'**s conventions, fallible functions return an integer code that is positive or zero on success, and negative on failure. If an error occurs, the **git_error_last** function will return a pointer to a **git_error** structure providing more details about what went wrong. **libgit2** owns this structure, so we don't need to free it ourselves, but it could be overwritten by the next library call we make. A proper Rust interface would use **Result**, but in
+the raw version, we want to use the **libgit2** functions just as they are, so we'll have to roll our own function for handling errors:
+
+    
+    #![warn(rust_2018_idioms)]
+    #![allow(elided_lifetimes_in_paths)]
+    
+    mod raw;
+    
+    use std::ffi::CStr;
+    use std::os::raw::c_int;
+    
+    
+    fn check(activity: &'static str, status: c_int) -> c_int {
+        if status < 0 {
+            unsafe {
+                // libgit2(v1.7) giterr_last(book) -> git_error_last
+                let error = &*raw::git_error_last();
+                println!("error while {}: {} ({})",
+                        activity,
+                        CStr::from_ptr(error.message).to_string_lossy(),
+                        error.klass);
+                std::process::exit(1);
+            }
+        }
+    
+        status
+    }
+    
+    unsafe fn show_commit(commit: *const raw::git_commit) {
+        let author = raw::git_commit_author(commit);
+    
+        let name = CStr::from_ptr((*author).name).to_string_lossy();
+        let email = CStr::from_ptr((*author).email).to_string_lossy();
+        println!("{} <{}>\n", name, email);
+    
+        let message = raw::git_commit_message(commit);
+        println!("{}", CStr::from_ptr(message).to_string_lossy());
+    }
+    
+    use std::ffi::CString;
+    use std::mem;
+    use std::ptr;
+    use std::os::raw::c_char;
+    
+    fn main() {
+        let path = std::env::args().skip(1).next()
+            .expect("usage: git-toy PATH");
+        let path = CString::new(path)
+            .expect("path contains null characters");
+    
+        unsafe {
+            check("initializing library", raw::git_libgit2_init());
+    
+            let mut repo = ptr::null_mut();
+            check("opening repository", 
+                raw::git_repository_open(&mut repo, path.as_ptr()));
+    
+            let c_name = b"HEAD\0".as_ptr() as *const c_char;
+            let oid = {
+                let mut oid = mem::MaybeUninit::uninit();
+                check("looking up HEAD",
+                    raw::git_reference_name_to_id(oid.as_mut_ptr(), repo, c_name));
+                oid.assume_init()
+            };
+    
+            let mut commit = ptr::null_mut();
+            check("looking up commit",
+                raw::git_commit_lookup(&mut commit, repo, &oid));
+    
+            show_commit(commit);
+    
+            raw::git_commit_free(commit);
+    
+            raw::git_repository_free(repo);
+    
+            check("shutting down library", raw::git_libgit2_shutdown());
+        }
+    
+    }
+
+The call to **git_repository_open** tries to open the Git repository at the given path. If it succeeds, it allocates a new **git_repository** object for it and sets **repo** to point to that. Rust implicitly coerces references into raw pointers, so passing **\&mut repo** here provides the **\*mut \*mut git_repository** the call expects.
+
+This shows another **libgit2** convention in use (from the **libgit2** documentation):
+
+    > Objects which are returned via the first argument as a pointer-to-pointer are owned by the caller and it is responsible for freeing them.
+
+In Rust terms, functions like **git_repository_open** pass ownership of the new value to the caller.
+
+It is possible to ask Rust to give us uninitialized memory, but because reading uninitialized memory at any time is instant undefined behavior, Rust provides an abstraction, **MaybeUninit**, to ease its use. **MaybeUninit\<T\>** tells the compiler to set aside enough memory for your type T, but not to touch it until you say that it's safe to do so. While this memory is owned by the **MaybeUninit**, the compiler will also avoid certain optimizations that could otherwise cause
+undefined behavior even without any explicit access to the uninitialized memory in your code.
+**MaybeUninit** provides a method, **as\_mut\_ptr\(\)**, that produces a **\*mut T** pointing to the potentially uninitialized memory it wraps. By passing that pointer to a foreign function that initializes the memory and then calling the unsafe method **assume\_init** on the **MaybeUninit** to produce a fully initialized **T**, you can avoid undefined behavior without the additional overhead that comes from initializing and immediately throwing away a value.
+**assume\_init** is unafe because calling it on a **MaybeUninit** without being certain that the memory is actually initialized will immediately cause undefined behavior.
+
+
 ## A Safe Interface to libgit2
+
+Here, then, are **libgit2**'s rules for the features the program uses:
+
+- You must call **git_libgit2_init** before using any other library function. You must not use any library function after calling **git_libgit2_shutdown**.
+- All values passed to **libgit2** functions must be fully initialized, except for output parameters.
+- When a call fails, output parameters passed to hold the results of the call are left uninitialized, and you must not use their values.
+- A **git_commit** object refers to the **git_repository** object it is derived from, so the former must not outlive the latter.
+- Similarly, a **git_signature** is always borrowed from a given **git_commit**, and the former must not outlive the latter.
+- The message associated with a commit and the name and email address of the author are all borrowed from the commit and must not be used after the commit is freed.
+- Once a **libgit2** object has been freed, it must never be used again.
+
+As it turns out, you can build a Rust interface to **libgit2** that enforces all of these rules, either through Rust's type system or by managing details internally.
+
+Rust closures cannot serve as C function pointers: a closure is a value of some anonymous type carrying the values of whatever variables it captures or references to them; a C function pointer is just a pointers. However, Rust **fn** types work fine, as long as you declare them **extern** so that Rust knows to use the C calling conventions. The local function **shutdown** fits the bill and ensures **libgit2** gets shut down properly.
+In "Unwinding" on page 158, we mentioned that it is undefined behavior for a panic to cross language boundaries. The call from **atexit** to **shutdown** can't simply use **\.expect** to handle errors reported from **raw::git_libgit2_shutdown**. Instead, it must report the error and terminate the process itself. **POSIX** forbids calling **exit** within an **atexit** handler, so **shutdown** calls **std::process::abort** to terminate the program abruptly.
+
 
 ## Conclusion
 
+Rust is not a simple language. Its goal is to span two very different worlds. It's a modern programming language, safe by design, with conveniences like closures and iterators, yet it aims to put you in control of the raw capabilities of the machine it runs on, with minimal run-time overhead.
 
