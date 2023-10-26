@@ -25,8 +25,12 @@ extern {
     pub fn git_commit_free(commit: *mut git_commit);
 }
 
+/*
 #[repr(C)] pub struct git_repository { _private: [u8; 0] }
 #[repr(C)] pub struct git_commit { _private: [u8; 0] }
+*/
+pub enum git_repository {}
+pub enum git_commit {}
 
 #[repr(C)]
 pub struct git_error {

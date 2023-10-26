@@ -2,9 +2,6 @@
 #![allow(elided_lifetimes_in_paths)]
 
 mod git;
-mod raw;
-
-
 
 fn main() {
     let path = std::env::args_os().skip(1).next()
@@ -25,7 +22,6 @@ fn main() {
             author.email().unwrap_or("none"));
 
     println!("{}", commit.message().unwrap_or("(none)"));
-
 
 }
 

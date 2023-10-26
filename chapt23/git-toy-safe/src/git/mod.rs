@@ -18,12 +18,12 @@ impl fmt::Display for Error {
     }
 }
 
-impl error::Error from Error { }
+impl error::Error for Error { }
 
 pub type Result<T> = result::Result<T, Error>;
 
-use std::ffi::CStr;
 use std::os::raw::c_int;
+use std::ffi::CStr;
 
 
 fn check(code: c_int) -> Result<c_int> {
@@ -88,7 +88,7 @@ extern fn shutdown() {
     unsafe {
         if let Err(e) = check(raw::git_libgit2_shutdown()) {
             eprintln!("shutdown down libgit2 failed: {}", e);
-            std::process::about();
+            std::process::abort();
         }
     }
 }
