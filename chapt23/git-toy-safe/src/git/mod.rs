@@ -8,7 +8,7 @@ use std::result;
 pub struct Error {
     code: i32,
     message: String,
-    class: i32
+    class: i32,
 }
 
 impl fmt::Display for Error {
@@ -18,13 +18,12 @@ impl fmt::Display for Error {
     }
 }
 
-impl error::Error for Error { }
+impl error::Error for Error {}
 
 pub type Result<T> = result::Result<T, Error>;
 
-use std::os::raw::c_int;
 use std::ffi::CStr;
-
+use std::os::raw::c_int;
 
 fn check(code: c_int) -> Result<c_int> {
     if code >= 0 {
@@ -40,19 +39,18 @@ fn check(code: c_int) -> Result<c_int> {
             .into_owned();
 
         Err(Error {
-            code: code as i32,
+            code /*: code as i32*/,
             message,
-            class: (*error).klass as i32
+            class: (*error).klass /*as i32*/,
         })
     }
-
 }
 
 /// A Git repository.
 pub struct Repository {
     // This must always be a pointer to a live `git_repository` structure.
     // No other `Repository` may point to it.
-    raw: *mut raw::git_repository
+    raw: *mut raw::git_repository,
 }
 
 use std::path::Path;
@@ -69,22 +67,18 @@ impl Repository {
         }
 
         Ok(Repository { raw: repo })
-            
     }
 }
 
 fn ensure_initialized() {
     static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(|| {
-        unsafe {
-            check(raw::git_libgit2_init())
-                .expect("initializing libgit2 failed");
-            assert_eq!(libc::atexit(shutdown), 0);
-        }
+    ONCE.call_once(|| unsafe {
+        check(raw::git_libgit2_init()).expect("initializing libgit2 failed");
+        assert_eq!(libc::atexit(shutdown), 0);
     });
 }
 
-extern fn shutdown() {
+extern "C" fn shutdown() {
     unsafe {
         if let Err(e) = check(raw::git_libgit2_shutdown()) {
             eprintln!("shutdown down libgit2 failed: {}", e);
@@ -118,8 +112,7 @@ fn path_to_cstring(path: &Path) -> Result<CString> {
     match path.to_str() {
         Some(s) => Ok(CString::new(s)?),
         None => {
-            let message = format!("Couldn't convert path '{}' to UTF-8",
-                                    path.display());
+            let message = format!("Couldn't convert path '{}' to UTF-8", path.display());
             Err(message.into())
         }
     }
@@ -127,7 +120,11 @@ fn path_to_cstring(path: &Path) -> Result<CString> {
 
 impl From<String> for Error {
     fn from(message: String) -> Error {
-        Error { code: -1, message, class: 0 }
+        Error {
+            code: -1,
+            message,
+            class: 0,
+        }
     }
 }
 
@@ -135,7 +132,11 @@ impl From<String> for Error {
 // has embedded zero bytes.
 impl From<std::ffi::NulError> for Error {
     fn from(e: std::ffi::NulError) -> Error {
-        Error { code: -1, message: e.to_string(), class: 0 }
+        Error {
+            code: -1,
+            message: e.to_string(),
+            class: 0,
+        }
     }
 }
 
@@ -143,7 +144,7 @@ impl From<std::ffi::NulError> for Error {
 /// database: a commit, tree, blob, tag, etc. This is a wide hash of the
 /// object's contents.
 pub struct Oid {
-    pub raw: raw::git_oid
+    pub raw: raw::git_oid,
 }
 
 use std::mem;
@@ -156,8 +157,9 @@ impl Repository {
             let oid = {
                 let mut oid = mem::MaybeUninit::uninit();
                 check(raw::git_reference_name_to_id(
-                        oid.as_mut_ptr(), self.raw,
-                        name.as_ptr() as *const c_char
+                    oid.as_mut_ptr(),
+                    self.raw,
+                    name.as_ptr() as *const c_char,
                 ))?;
                 oid.assume_init()
             };
@@ -171,7 +173,7 @@ use std::marker::PhantomData;
 pub struct Commit<'repo> {
     // This must always be a pointer to a usable `git_commit` structure.
     raw: *mut raw::git_commit,
-    _marker: PhantomData<&'repo Repository>
+    _marker: PhantomData<&'repo Repository>,
 }
 
 impl Repository {
@@ -180,7 +182,10 @@ impl Repository {
         unsafe {
             check(raw::git_commit_lookup(&mut commit, self.raw, &oid.raw))?;
         }
-        Ok(Commit { raw: commit, _marker: PhantomData })
+        Ok(Commit {
+            raw: commit,
+            _marker: PhantomData,
+        })
     }
 }
 
@@ -197,7 +202,7 @@ impl<'repo> Commit<'repo> {
         unsafe {
             Signature {
                 raw: raw::git_commit_author(self.raw),
-                _marker: PhantomData
+                _marker: PhantomData,
             }
         }
     }
@@ -212,24 +217,20 @@ impl<'repo> Commit<'repo> {
 
 pub struct Signature<'text> {
     raw: *const raw::git_signature,
-    _marker: PhantomData<&'text str>
+    _marker: PhantomData<&'text str>,
 }
 
 impl<'text> Signature<'text> {
     /// Return the author's name as a `&str`,
     /// or `None` if it is not well-formed UTF-8.
     pub fn name(&self) -> Option<&str> {
-        unsafe {
-            char_ptr_to_str(self, (*self.raw).name)
-        }
+        unsafe { char_ptr_to_str(self, (*self.raw).name) }
     }
 
     /// Return the author's email as a `&str`,
     /// or `None` if it is not well-formed UTF-8.
     pub fn email(&self) -> Option<&str> {
-        unsafe {
-            char_ptr_to_str(self, (*self.raw).email)
-        }
+        unsafe { char_ptr_to_str(self, (*self.raw).email) }
     }
 }
 
@@ -242,14 +243,9 @@ impl<'text> Signature<'text> {
 /// `_owner`.
 unsafe fn char_ptr_to_str<T>(_owner: &T, ptr: *const c_char) -> Option<&str> {
     if ptr.is_null() {
-        return None;
+        //return None;
+        None
     } else {
         CStr::from_ptr(ptr).to_str().ok()
     }
 }
-
-
-
-
-
-

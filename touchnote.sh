@@ -1,7 +1,8 @@
 #!/bin/bash
-for loop in {10..23}
+for loop in {1..14}
 do
-    mkdir chapt$loop
-    touch ./chapt$loop/NOTE$loop.md
+    var=$(printf "%02d" "$loop")
+    mkdir chapt$var
+    touch ./chapt$var/NOTE$var.md
 done
 
